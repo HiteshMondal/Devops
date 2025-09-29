@@ -34,9 +34,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY default.conf /etc/nginx/conf.d/default.conf
 
 # Copy static files from builder stage
-COPY --from=builder /build/index.html /usr/share/nginx/html/
-COPY --from=builder /build/styles.css /usr/share/nginx/html/ 2>/dev/null || :
-COPY --from=builder /build/script.js /usr/share/nginx/html/ 2>/dev/null || :
+COPY --from=builder /build/app.html /usr/share/nginx/html/
+
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
