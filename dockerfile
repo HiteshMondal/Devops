@@ -40,7 +40,7 @@ COPY --from=builder /build/script.js /usr/share/nginx/html/ 2>/dev/null || :
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost/ || exit 1
+  CMD curl -f http://localhost/3000 || exit 1
 
 # Create non-root user
 RUN addgroup -g 1001 -S nginx-group && \
@@ -55,7 +55,7 @@ RUN addgroup -g 1001 -S nginx-group && \
 USER nginx-user
 
 # Expose port
-EXPOSE 8080
+EXPOSE 3000
 
 # Labels for image metadata
 LABEL maintainer="DevOps Team"
