@@ -21,7 +21,7 @@ amazon-linux-extras install nginx1 -y
 mkdir -p /opt/webapp
 
 # Create a simple HTML file (backup if Docker fails)
-cat > /opt/webapp/index.html <<EOF
+cat > /opt/webapp/app.html <<EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -44,7 +44,7 @@ server {
     
     location / {
         root /opt/webapp;
-        index index.html;
+        index app.html;
     }
     
     location /health {
