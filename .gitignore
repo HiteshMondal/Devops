@@ -33,3 +33,8 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+#Kubectl
+# Ignore Kubeconfig files, which are likely to contain sensitive data, such as
+Kube\service.yaml
+Kube/secret.yaml
