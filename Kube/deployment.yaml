@@ -24,7 +24,7 @@ spec:
         version: v1
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
+        prometheus.io/port: "3000"
         prometheus.io/path: "/metrics"
     spec:
       affinity:
@@ -44,7 +44,7 @@ spec:
         image: devops:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080
+        - containerPort: 3000
           name: http
           protocol: TCP
         envFrom:
@@ -74,7 +74,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 3000
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -82,7 +82,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 3000
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3

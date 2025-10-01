@@ -105,7 +105,7 @@ pipeline {
                 script {
                     // Run container for testing
                     sh """
-                        docker run -d --name test-container -p 8081:8080 ${DOCKER_IMAGE_NAME}:${env.BUILD_VERSION}
+                        docker run -d --name test-container -p 8081:3000 ${DOCKER_IMAGE_NAME}:${env.BUILD_VERSION}
                         sleep 5
                         
                         # Test health endpoint
@@ -213,7 +213,7 @@ spec:
       - name: webapp
         image: ${DOCKER_IMAGE_NAME}:${env.BUILD_VERSION}
         ports:
-        - containerPort: 8080
+        - containerPort: 3000
 EOF
                                 
                                 # Wait for green deployment
