@@ -1,4 +1,4 @@
-### Terraform ###
+#Terraform
 # Local .terraform directories
 **/.terraform/*
 
@@ -34,7 +34,11 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-#Kubectl
-# Ignore Kubeconfig files, which are likely to contain sensitive data, such as
-Kube\service.yaml
-Kube/secret.yaml
+# Environments
+.env
+venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/

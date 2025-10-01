@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: webapp-deployment
-  namespace: devops-demo
+  namespace: devops
   labels:
     app: webapp
     version: v1
@@ -41,7 +41,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: webapp
-        image: devops-demo:latest
+        image: devops:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
