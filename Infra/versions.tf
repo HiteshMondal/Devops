@@ -15,11 +15,11 @@ terraform {
 
   # Backend configuration for state management
   backend "s3" {
-    bucket         = "terraform-state-devops-demo"
+    bucket         = "bucket-440597412995"
     key            = "infrastructure/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "eu-north-1"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    use_lockfile   = true
   }
 }
 

@@ -85,4 +85,24 @@ Get Minikube IP:
 ```bash
 minikube ip
 ```
+#For Terraform AWS
 
+Option A: Set environment variables (simplest for local machine)
+```bash
+export AWS_ACCESS_KEY_ID="your_access_key_here"
+export AWS_SECRET_ACCESS_KEY="your_secret_key_here"
+export AWS_DEFAULT_REGION="eu-north-1"
+```
+On Windows PowerShell:
+```bash
+setx AWS_ACCESS_KEY_ID "your_access_key_here"
+setx AWS_SECRET_ACCESS_KEY "your_secret_key_here"
+setx AWS_DEFAULT_REGION "eu-north-1"
+
+```
+
+Option B:Use AWS credentials file
+Install AWS CLI if you haven’t.
+```bash
+aws configure
+```
