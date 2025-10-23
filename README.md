@@ -1,4 +1,4 @@
-# DevOps WebApp Project
+# DevOps Project
 
 This project demonstrates a full DevOps setup using **Kubernetes, Terraform, Docker, Nginx, CI/CD pipelines**, and autoscaling. It is designed to run locally using **Minikube** or on cloud infrastructure.
 
