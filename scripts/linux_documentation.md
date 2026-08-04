@@ -84,6 +84,7 @@ cd /path/to/dir  # absolute path
 cd ..            # go up one level
 cd ~             # go to home directory
 cd -             # go to previous directory
+cd ./-           # Read dashed filename "-"
 ```
 
 ## Quoting rules
