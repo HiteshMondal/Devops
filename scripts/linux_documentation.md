@@ -77,14 +77,16 @@ Boot process section only covers systemd. Worth knowing that older/other systems
 
 # Part 1 — Linux Commands
 
-## Navigating the filesystem (pwd, cd)
+## Navigating and accessing the filesystem (pwd, cd, cat)
 ```bash
 pwd              # print current directory
 cd /path/to/dir  # absolute path
 cd ..            # go up one level
 cd ~             # go to home directory
 cd -             # go to previous directory
-cd ./-           # Read dashed filename "-"
+cd ./-           # View dashed filename "-"
+cat -- "--spaces in this filename--" # View file --spaces in this filename--
+cat ./-file07    # View file -file07, Without "./" it will show error
 ```
 
 ## Quoting rules
@@ -865,6 +867,11 @@ find /var -group www-data             # Files owned by group www-data
 find /tmp -name "*.tmp" -delete       # Delete all .tmp files
 find /logs -name "*.log" -exec cat {} \;   # Cat each found file
 find /home -type f -exec chmod 644 {} \;  # Fix permissions
+
+file ./*                              # Shows types like data, ASCII text, Key
+find . -type f -size 1033c ! -executable # Example to find file with human-readable, 1033 bytes in size and not executable
+find / -type f -user bandit7 -group bandit6 -size 33c 2>/dev/null
+
 ```
 
 ---
