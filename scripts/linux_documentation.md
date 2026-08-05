@@ -1163,6 +1163,16 @@ du -h /home | sort -rh | head -10
 
 ---
 
+## What is strings command?
+
+It Extract printable strings from binary files.
+
+```bash
+strings data.txt | grep "==="        # Shows human-readable strings preceded by several ‘=’ characters.
+```
+
+---
+
 ## What is SELinux?
 
 **Security-Enhanced Linux (SELinux)** is a mandatory access control (MAC) security framework built into the Linux kernel — primarily used in RHEL/CentOS systems.
@@ -1277,6 +1287,56 @@ watch free -h            # Refresh memory usage
 watch df -h              # Refresh disk usage
 watch uptime             # Refresh system load
 watch ps aux             # Refresh process list
+```
+
+---
+
+## What is Base64?
+
+What is Base64?
+
+Base64 is an encoding algorithm, not encryption.
+
+Encoding: Converts data into a format that can be safely transmitted as text.
+Decoding: Converts the Base64 text back into the original data.
+
+```bash
+# Syntax
+base64 [OPTION]... [FILE]
+
+# Encode a file
+echo "Hello World" > file.txt
+base64 file.txt
+
+# Decode a File
+cat encoded.txt
+base64 -d encoded.txt
+
+# Encode Text
+echo "Linux" | base64        # TGludXgK
+echo -n "Linux" | base64        # No extra K at the end comes from the newline added by echo - TGludXg=
+
+# Decode Text
+echo "TGludXg=" | base64 -d
+
+# Encode and Decode Binary Files
+base64 image.png > image.b64
+base64 -d image.b64 > image_copy.png
+
+# Encode and Decode JSON
+echo -n '{"name":"Alice"}' | base64
+echo "eyJuYW1lIjoiQWxpY2UifQ==" | base64 -d
+```
+
+---
+
+## What is tr Command?
+
+Linux provides the tr (translate) command to replace one set of characters with another.
+```bash
+echo "abc" | tr 'abc' 'xyz'        # xyz
+cat data.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'        # Alphabet rotated by 13 positions
+tr 'A-Za-z' 'N-ZA-Mn-za-m' < data.txt
 ```
 
 ---
