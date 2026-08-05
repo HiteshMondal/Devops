@@ -1105,6 +1105,86 @@ tar -xvf backup.tar home/user/file.txt
 ```
 
 ---
+## What are gunzip and bunzip2 Commands in Linux?
+
+gunzip and bunzip2 are Linux commands used to decompress (extract) files that have been compressed using different compression algorithms.
+
+### `gunzip`
+
+* **Purpose:** Decompresses **Gzip (`.gz`)** files.
+* **Compression command:** `gzip`
+* **Decompression command:**
+
+  ```bash
+  gunzip file.gz
+  ```
+* **Example:**
+
+  ```bash
+  mv data data.gz
+  gunzip data.gz
+  ```
+
+---
+
+### `bunzip2`
+
+* **Purpose:** Decompresses **Bzip2 (`.bz2`)** files.
+* **Compression command:** `bzip2`
+* **Decompression command:**
+
+  ```bash
+  bunzip2 file.bz2
+  ```
+* **Example:**
+
+  ```bash
+  mv data data.bz2
+  bunzip2 data.bz2
+  ```
+
+---
+
+### How to Know Which One to Use
+
+Check the file type first:
+
+```bash
+file data
+```
+
+Output:
+
+```text
+data: gzip compressed data
+```
+
+Use:
+
+```bash
+gunzip data.gz
+```
+
+Output:
+
+```text
+data: bzip2 compressed data
+```
+
+Use:
+
+```bash
+bunzip2 data.bz2
+```
+
+### Quick Comparison
+
+| Command   | File Extension | Used For               |
+| --------- | -------------- | ---------------------- |
+| `gunzip`  | `.gz`          | Gzip-compressed files  |
+| `bunzip2` | `.bz2`         | Bzip2-compressed files |
+
+---
 
 ## Difference between `apt` and `yum`/`dnf`?
 
