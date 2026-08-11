@@ -38,7 +38,6 @@ Why swap exists: when physical RAM fills up, the kernel moves inactive memory pa
 - This ties into why /mnt and /media exist in the directory structure
 
 **8. Shells are interchangeable - bash isn't "the" shell**
-The doc uses bash throughout but never explains that Linux supports multiple shells:
 - bash (most common default), sh/dash (POSIX, lighter, faster), zsh, fish, ksh
 - Your default shell is set in /etc/passwd and can be changed with chsh
 
@@ -84,6 +83,7 @@ cd -             # go to previous directory
 cd ./-           # View dashed filename "-"
 cat -- "--spaces in this filename--" # View file --spaces in this filename--
 cat ./-file07    # View file -file07, Without "./" it will show error
+diff passwords.old passwords.new        # Compare the Two Files
 ```
 
 ## Quoting rules
@@ -469,7 +469,7 @@ vi sshkey.private
 -----END OPENSSH PRIVATE KEY-----
 
 chmod 600 sshkey.private
-ssh -i sshkey.private -p 2220 bandit14@bandit.labs.overthewire.org
+ssh -i sshkey.private -p port_number username@hostname
 ```
 
 ## How to view the first and last lines of a file?
@@ -993,6 +993,17 @@ cat /etc/resolv.conf        # View configured DNS servers
 # Test specific ports
 nc -zv google.com 443       # Check if TCP port 443 is open
 telnet google.com 80        # Test TCP connection (if installed)
+nmap localhost -p 31000-32000        # Find Open ports within a range
+cat /etc/bandit_pass/bandit14 | nc localhost 30000        # Submitting the password to port 30000 on localhost.
+cat /etc/bandit_pass/bandit15 | openssl s_client -connect localhost:30001 -quiet        # Submit the password to port 30001 on localhost using SSL/TLS encryption.
+| Part        | Meaning                   |
+| ----------- | ------------------------- |
+| `openssl`   | OpenSSL command-line tool |
+| `s_client`  | SSL/TLS client            |
+| `-connect`  | Connect to a server       |
+| `localhost` | This machine              |
+| `30001`     | Server port               |
+| `-quiet`    | reduce/suppress extra TLS connection information    |
 
 # Download a webpage (test HTTP/HTTPS)
 curl https://google.com     # Fetch webpage
