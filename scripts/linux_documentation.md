@@ -1,78 +1,96 @@
-# Linux Commands & Shell Scripting - Complete Interview Q&A
+# Linux Commands & Shell Scripting — Complete Reference
 
-A comprehensive guide covering Linux commands and shell scripting concepts with detailed explanations, real-world examples, and interview tips.
-
-**1. What Linux actually is (kernel vs. OS vs. distro)**
-The file uses "Linux" throughout but never clarifies:
-- Linux = just the kernel (created by Linus Torvalds in 1991)
-- A distribution (distro) = kernel + GNU tools + package manager + desktop, e.g., Ubuntu, Fedora, Debian
-- "Linux OS" is really "GNU/Linux" - the GNU userland tools (bash, coreutils, etc.) run on top of the Linux kernel
-
-**2. Open source & licensing**
-- Linux is released under the GPL (GNU General Public License)
-- Meaning: source code is free to view, modify, and redistribute
-- This is why so many distros exist - anyone can fork and customize it
-
-**3. Monolithic kernel + user space vs. kernel space**
-- Linux uses a monolithic kernel (all core services run in kernel space for performance) vs. a microkernel design
-- Kernel space: where the kernel runs, has direct hardware access
-- User space: where normal applications/programs run, isolated for stability/security
-- System calls are the bridge between the two
-
-**4. Multi-user, multitasking nature**
-- Linux was designed from the ground up to let multiple users run multiple processes simultaneously, unlike early single-user OSes
-- This is why permissions (owner/group/others) exist at all - a direct consequence of being multi-user
-
-**5. Processes, threads, and process states**
-- Process vs thread (a thread is a lightweight unit within a process, sharing memory)
-- fork() and exec() - how new processes are actually created in Linux (fork duplicates a process, exec replaces it with a new program)
-- Process states: Running, Sleeping, Zombie (finished but not reaped by parent), Orphan (parent died first)
-
-**6. Swap space & virtual memory concept**
-Why swap exists: when physical RAM fills up, the kernel moves inactive memory pages to disk (swap) to free RAM - a core OS memory-management concept, not just a command.
-
-**7. Mounting, /etc/fstab, and partitions (deeper concept)**
-- A partition is a physical/logical division of a disk
-- Mounting attaches a filesystem (partition, USB drive, network share) to a directory in the tree so it becomes accessible
-- /etc/fstab defines what gets mounted automatically at boot
-- This ties into why /mnt and /media exist in the directory structure
-
-**8. Shells are interchangeable - bash isn't "the" shell**
-- bash (most common default), sh/dash (POSIX, lighter, faster), zsh, fish, ksh
-- Your default shell is set in /etc/passwd and can be changed with chsh
-
-**9. Init systems beyond systemd**
-Boot process section only covers systemd. Worth knowing that older/other systems use:
-- SysVinit (older, sequential scripts in /etc/init.d)
-- Upstart (used briefly by older Ubuntu)
-- systemd is now the modern standard on most distros, but not universal (e.g., some minimal distros still avoid it)
-
-**10. Display server / desktop environment (if using GUI)**
-- X11 vs Wayland - the underlying display server protocols
-- Desktop environment (GNOME, KDE, XFCE) vs window manager - different layers of the GUI stack
-- Not relevant for server admins, but useful for a complete beginner picture
-
-**11. Containers vs. virtual machines (high-level only)**
-- A VM virtualizes entire hardware + OS via a hypervisor
-- A container (Docker, etc.) shares the host kernel but isolates processes using namespaces and cgroups
-- Just the conceptual difference is worth knowing even without going deep into Docker internally
+A comprehensive guide to Linux commands and shell scripting: concepts, commands, and real-world examples.
 
 ## Table of Contents
 
-- Part 1 - Linux Commands
-- Part 2 - Advanced Linux Commands
-- Part 3 - Shell Scripting Basics
-- Part 4 - Advanced Shell Scripting
-- Part 5 - Linux Directory Structure
-- Part 6 - Linux Boot Process
-- Part 7 - System Administration
-- Part 8 - DevOps-Focused Linux
-- Part 9 - Practical Shell Script Examples
-- Quick Reference Cheatsheet
+1. [Core Concepts](#core-concepts)
+2. [Shell & Terminal Basics](#shell--terminal-basics)
+3. [File & Directory Commands](#file--directory-commands)
+4. [Permissions & Ownership](#permissions--ownership)
+5. [Users, Groups & Access](#users-groups--access)
+6. [Searching & Text Processing](#searching--text-processing)
+7. [Networking](#networking)
+8. [Archives & Compression](#archives--compression)
+9. [Package Management](#package-management)
+10. [System Monitoring & Resources](#system-monitoring--resources)
+11. [Process Management](#process-management)
+12. [Scheduling (cron & at)](#scheduling-cron--at)
+13. [Logs](#logs)
+14. [Links (Soft vs Hard)](#links-soft-vs-hard)
+15. [SELinux](#selinux)
+16. [Encoding & Misc Utilities](#encoding--misc-utilities)
+17. [Shell Scripting Basics](#shell-scripting-basics)
+18. [Advanced Shell Scripting](#advanced-shell-scripting)
+19. [I/O Redirection & Pipelines](#io-redirection--pipelines)
+20. [Linux Directory Structure](#linux-directory-structure)
+21. [Linux Boot Process](#linux-boot-process)
+22. [Practical Shell Script Examples](#practical-shell-script-examples)
+23. [Quick Reference Cheatsheet](#quick-reference-cheatsheet)
 
-# Part 1 - Linux Commands
+---
 
-## Navigating and accessing the filesystem (pwd, cd, cat)
+## Core Concepts
+
+### 1. Linux = Kernel vs. OS vs. Distro
+- **Linux** = just the kernel (created by Linus Torvalds in 1991)
+- A **distribution (distro)** = kernel + GNU tools + package manager + desktop, e.g., Ubuntu, Fedora, Debian
+- "Linux OS" is really **GNU/Linux** — the GNU userland tools (bash, coreutils, etc.) run on top of the Linux kernel
+
+### 2. Open Source & Licensing
+- Linux is released under the **GPL** (GNU General Public License)
+- Source code is free to view, modify, and redistribute
+- This is why so many distros exist — anyone can fork and customize it
+
+### 3. Monolithic Kernel vs. Microkernel
+- Linux uses a **monolithic kernel** (all core services run in kernel space for performance)
+- **Kernel space**: where the kernel runs, has direct hardware access
+- **User space**: where normal applications/programs run, isolated for stability/security
+- **System calls** are the bridge between the two
+
+### 4. Multi-user, Multitasking Nature
+- Linux was designed from the ground up to let multiple users run multiple processes simultaneously
+- This is why permissions (owner/group/others) exist at all — a direct consequence of being multi-user
+
+### 5. Processes, Threads & Process States
+- **Process vs thread**: a thread is a lightweight unit within a process, sharing memory
+- **fork() and exec()**: fork duplicates a process, exec replaces it with a new program
+- **Process states**: Running, Sleeping, Zombie (finished but not reaped by parent), Orphan (parent died first)
+
+### 6. Swap Space & Virtual Memory
+When physical RAM fills up, the kernel moves inactive memory pages to disk (swap) to free RAM — a core OS memory-management concept.
+
+### 7. Mounting, /etc/fstab & Partitions
+- A **partition** is a physical/logical division of a disk
+- **Mounting** attaches a filesystem (partition, USB drive, network share) to a directory in the tree so it becomes accessible
+- `/etc/fstab` defines what gets mounted automatically at boot
+- This ties into why `/mnt` and `/media` exist in the directory structure
+
+### 8. Shells Are Interchangeable
+- `bash` (most common default), `sh`/`dash` (POSIX, lighter, faster), `zsh`, `fish`, `ksh`
+- Your default shell is set in `/etc/passwd` and can be changed with `chsh`
+
+### 9. Init Systems Beyond systemd
+- **SysVinit** (older, sequential scripts in `/etc/init.d`)
+- **Upstart** (used briefly by older Ubuntu)
+- **systemd** is now the modern standard on most distros, but not universal (some minimal distros still avoid it)
+
+### 10. Display Server / Desktop Environment (GUI)
+- **X11 vs Wayland** — the underlying display server protocols
+- **Desktop environment** (GNOME, KDE, XFCE) vs **window manager** — different layers of the GUI stack
+
+### 11. Containers vs. Virtual Machines
+- A **VM** virtualizes entire hardware + OS via a hypervisor
+- A **container** (Docker, etc.) shares the host kernel but isolates processes using namespaces and cgroups
+
+### POSIX Compliance
+POSIX (Portable Operating System Interface) is a set of IEEE standards specifying how Unix-like operating systems should behave (commands, APIs, shell behavior, utilities). The goal is portability — a script written for one POSIX-compliant system should run on another with little or no modification.
+
+---
+
+## Shell & Terminal Basics
+
+### Navigating the Filesystem
 
 ```bash
 pwd              # print current directory
@@ -81,47 +99,43 @@ cd ..            # go up one level
 cd ~             # go to home directory
 cd -             # go to previous directory
 cd ./-           # View dashed filename "-"
-cat -- "--spaces in this filename--" # View file --spaces in this filename--
-cat ./-file07    # View file -file07, Without "./" it will show error
-diff passwords.old passwords.new        # Compare the Two Files
-```
 whoami           # print current logged-in username
 clear            # clear the terminal screen
 exit             # close the current shell session
+```
 
-## Quoting rules
+### Absolute vs Relative Paths
 
-'single quotes' -> literal, no variable expansion
-"double quotes" -> allows $variable expansion
-`backticks` / $(command) -> command substitution
-echo $var can break with spaces/globbing but echo "$var" doesn't
-`command`   -> old-style command substitution (harder to nest, avoid in new scripts)
-$(command)  -> modern preferred style (nests cleanly, more readable)
+```bash
+cd /home/hitesh/projects   # absolute - works from anywhere
+cd projects                # relative - only works if you're already in /home/hitesh
+```
+- **Absolute path**: starts from root (`/`), always points to the same location, e.g. `/home/hitesh/projects/app.sh`
+- **Relative path**: starts from your current directory (`pwd`), e.g. `./app.sh` or `../projects/app.sh`
 
-name=`whoami`    # Old
-name=$(whoami)    # Preferred
+### Quoting Rules
+- `'single quotes'` → literal, no variable expansion
+- `"double quotes"` → allows `$variable` expansion
+- `` `backticks` `` / `$(command)` → command substitution
+- `echo $var` can break with spaces/globbing but `echo "$var"` doesn't
 
-## Default text editors - nano or vim
+```bash
+name=`whoami`     # Old style — harder to nest, avoid in new scripts
+name=$(whoami)    # Preferred — nests cleanly, more readable
+```
 
-## Terminal Types
+### Wildcards / Globbing
 
-bash (most common default), sh/dash (POSIX, lighter, faster), zsh, fish, ksh
-Your default shell is set in /etc/passwd and can be changed with chsh
-
-Let's go deeper on each of these.
-
-## Wildcards / Globbing
-
-Globbing lets the shell (not the command) expand patterns into matching filenames before the command ever runs. This is important to understand - `ls *.txt` doesn't ask `ls` to interpret `*`; bash expands `*.txt` into actual filenames first, and `ls` just receives a plain list.
+Globbing lets the shell (not the command) expand patterns into matching filenames before the command runs. `ls *.txt` doesn't ask `ls` to interpret `*` — bash expands `*.txt` into actual filenames first, and `ls` just receives a plain list.
 
 | Pattern | Meaning | Example match |
 |---|---|---|
-| `*` | Zero or more of any character | `*.log` -> `app.log`, `error.log` |
-| `?` | Exactly one character | `file?.txt` -> `file1.txt`, not `file10.txt` |
-| `[abc]` | One character from the set | `file[123].txt` -> `file1.txt`, `file2.txt`, `file3.txt` |
-| `[a-z]` | One character in a range | `[A-Z]*` -> files starting with uppercase |
-| `[!abc]` or `[^abc]` | One character NOT in the set | `file[!1].txt` -> anything except `file1.txt` |
-| `{a,b,c}` | Brace expansion (bash-specific, not true globbing) | `file.{txt,log}` -> `file.txt file.log` |
+| `*` | Zero or more of any character | `*.log` → `app.log`, `error.log` |
+| `?` | Exactly one character | `file?.txt` → `file1.txt`, not `file10.txt` |
+| `[abc]` | One character from the set | `file[123].txt` → `file1.txt`, `file2.txt`, `file3.txt` |
+| `[a-z]` | One character in a range | `[A-Z]*` → files starting with uppercase |
+| `[!abc]` / `[^abc]` | One character NOT in the set | `file[!1].txt` → anything except `file1.txt` |
+| `{a,b,c}` | Brace expansion (bash-specific) | `file.{txt,log}` → `file.txt file.log` |
 
 ```bash
 ls *.sh                  # all shell scripts
@@ -130,23 +144,11 @@ cp report{,.bak}         # expands to: cp report report.bak
 mv file?.txt archive/    # only single-char-suffix files
 ```
 
-Gotcha: if no file matches the pattern, bash (by default) passes the literal pattern string to the command instead of an empty list - e.g. `ls *.xyz` with no `.xyz` files prints `ls: cannot access '*.xyz'`. This trips up scripts that assume globs always expand to something real.
+> **Gotcha:** if no file matches the pattern, bash (by default) passes the literal pattern string to the command instead of an empty list — e.g. `ls *.xyz` with no `.xyz` files prints `ls: cannot access '*.xyz'`.
+>
+> **Globbing is not regex.** `*` in globbing means "anything," but in regex `*` means "zero or more of the previous character." `grep` uses regex; `ls`/`rm`/`cp` use globbing.
 
-Globbing is not regex. `*` in globbing means "anything," but in regex `*` means "zero or more of the previous character." Don't mix them up - `grep` uses regex, `ls`/`rm`/`cp` use globbing.
-
-## Absolute vs relative paths
-Absolute path: starts from root (/), always points to the same location
-  e.g. /home/hitesh/projects/app.sh
-
-Relative path: starts from your current directory (pwd), changes based on where you are
-  e.g. ./app.sh or ../projects/app.sh
-
-cd /home/hitesh/projects   # absolute - works from anywhere
-cd projects                # relative - only works if you're already in /home/hitesh
-
-## Getting Help
-
-Three built-in ways to learn about a command without leaving the terminal:
+### Getting Help
 
 ```bash
 man ls              # full manual page: description, all options, examples
@@ -156,17 +158,13 @@ whatis ls           # one-line description only
 info ls             # some tools have more detailed "info" documentation (GNU-specific)
 ```
 
-Navigating man pages:
-- Space / f -> page down
-- b -> page up
-- /searchterm -> search inside the page, n -> next match
-- q -> quit
+Navigating man pages: `Space`/`f` page down · `b` page up · `/searchterm` search inside the page, `n` next match · `q` quit
 
-Rule of thumb: --help for a quick reminder of flags you half-remember; man when you need real depth (exit codes, edge cases, related commands via "SEE ALSO" section at the bottom).
+> Rule of thumb: `--help` for a quick reminder of flags you half-remember; `man` when you need real depth (exit codes, edge cases, "SEE ALSO" section).
 
-## which / whereis / type
+### which / whereis / type
 
-These all answer "where does this command actually come from?" - but they answer slightly different questions.
+These all answer "where does this command actually come from?" — but answer slightly different questions.
 
 ```bash
 which python3
@@ -180,18 +178,16 @@ whereis python3
 type cd
 # cd is a shell builtin
 # -> Tells you HOW the command resolves: builtin, alias, function, or file
-```
 
-Why this matters:
-- If you have two versions of a command installed (e.g. system Python and a virtualenv Python), `which` tells you which one will actually execute
-- `type` catches things `which` misses - e.g. if `ll` is an alias, `which ll` might say "not found" while `type ll` shows the alias definition
-- Useful for debugging "command not found" or "wrong version is running" issues, especially when troubleshooting $PATH problems
-
-```bash
 type -a python    # shows ALL matches (alias, function, AND binary) if there are multiple
 ```
 
-## alias - Shortcuts for Frequently Used Commands
+Why this matters:
+- If you have two versions of a command installed, `which` tells you which one will actually execute
+- `type` catches things `which` misses — e.g. if `ll` is an alias, `which ll` might say "not found" while `type ll` shows the alias definition
+- Useful for debugging "command not found" or "wrong version is running" issues, especially with `$PATH` problems
+
+### alias — Shortcuts for Frequently Used Commands
 
 An alias maps a short word to a longer command string, expanded by the shell before execution.
 
@@ -210,17 +206,14 @@ alias ll          # show what "ll" expands to
 unalias ll        # remove it for this session
 ```
 
-Important: aliases defined on the command line only last for the current terminal session. To make them permanent, add them to `~/.bashrc` (see next section) and reload with:
-```bash
-source ~/.bashrc
-```
+> Aliases defined on the command line only last for the current terminal session. To make them permanent, add them to `~/.bashrc` and reload with `source ~/.bashrc`.
 
-Limitation: aliases are simple text substitution - they can't take positional logic or conditionals. If you need something smarter (e.g. accepting arguments in different positions), write a function instead:
+> **Limitation:** aliases are simple text substitution — no positional logic or conditionals. For that, write a function instead:
 ```bash
 mkcd() { mkdir -p "$1" && cd "$1"; }   # a function, not an alias
 ```
 
-## Command History Shortcuts
+### Command History Shortcuts
 
 Bash keeps a record of commands you've run, stored in `~/.bash_history` (written when the shell exits).
 
@@ -230,39 +223,37 @@ history 20           # last 20 commands only
 history -c           # clear history for this session
 ```
 
-Recall shortcuts:
 | Shortcut | Effect |
 |---|---|
 | `!!` | Repeat the last command |
 | `!n` | Repeat command number `n` from `history` |
 | `!string` | Repeat the last command starting with `string` |
 | `!string:p` | Print the command without running it (preview) |
-| `Ctrl+R` | Reverse search - type part of a past command, it fuzzy-matches as you type |
+| `Ctrl+R` | Reverse search — type part of a past command, fuzzy-matches as you type |
 | `↑` / `↓` | Step backward/forward through history one at a time |
 | `!$` | Last argument of the previous command |
 | `!*` | All arguments of the previous command |
 
+Terminal control shortcuts:
+```text
 Ctrl+C  -> interrupt/kill current running command
 Ctrl+D  -> send EOF, exits shell or logs out if line is empty
 Ctrl+L  -> clear the terminal screen (same as `clear`)
 Ctrl+A  -> jump cursor to start of line
 Ctrl+E  -> jump cursor to end of line
+```
 
 Practical examples:
 ```bash
-sudo !!                  # re-run last command, but with sudo (classic fix for "permission denied")
+sudo !!                       # re-run last command, but with sudo (classic fix for "permission denied")
 mkdir new_project && cd !$    # cd into "new_project" using !$ instead of retyping it
 ```
 
-Ctrl+R workflow:
-1. Press Ctrl+R
-2. Start typing a fragment of a past command, e.g. `docker`
-3. Bash shows the most recent match
-4. Press Ctrl+R again to cycle to older matches, Enter to run, or ->/Esc to edit before running
+Ctrl+R workflow: press `Ctrl+R` → type a fragment (e.g. `docker`) → bash shows the most recent match → press `Ctrl+R` again to cycle older matches, `Enter` to run, or `→`/`Esc` to edit before running.
 
-## xargs
+### xargs
 
-Many commands (`rm`, `chmod`, `mkdir`) don't read from stdin - they only accept arguments directly on the command line. `xargs` bridges that gap: it takes lines from stdin and converts them into arguments for another command.
+Many commands (`rm`, `chmod`, `mkdir`) don't read from stdin — they only accept arguments directly on the command line. `xargs` bridges that gap: it takes lines from stdin and converts them into arguments for another command.
 
 ```bash
 find . -name "*.tmp" | xargs rm              # delete every .tmp file found
@@ -270,13 +261,8 @@ echo "file1.txt file2.txt" | xargs touch     # create both files
 cat urls.txt | xargs -n 1 curl -O            # download each URL, one at a time
 ```
 
-Why not just pipe directly? This does NOT work:
-```bash
-find . -name "*.tmp" | rm      # rm doesn't read stdin, this fails/does nothing useful
-```
-`rm` needs filenames as arguments, not piped text - `xargs` converts one into the other.
+> Why not just pipe directly? This does **NOT** work: `find . -name "*.tmp" | rm` — `rm` doesn't read stdin, it needs filenames as arguments, not piped text.
 
-Key flags:
 | Flag | Purpose |
 |---|---|
 | `-n N` | Pass only N arguments per command execution |
@@ -284,45 +270,36 @@ Key flags:
 | `-P N` | Run N processes in parallel |
 | `-0` | Use null-byte separation (pairs with `find -print0`, safest for filenames with spaces) |
 
-Handling filenames with spaces (important gotcha):
 ```bash
 # Unsafe - breaks on filenames with spaces
 find . -name "*.log" | xargs rm
 
 # Safe version
 find . -name "*.log" -print0 | xargs -0 rm
-```
 
-Using -I {} when the filename isn't the last argument:
-```bash
+# Using -I {} when the filename isn't the last argument
 find . -name "*.jpg" | xargs -I {} cp {} /backup/
 # {} is replaced by each filename in turn
-```
 
-Real-world example - kill all processes matching a name:
-```bash
+# Real-world example - kill all processes matching a name
 ps aux | grep node | awk '{print $2}' | xargs kill -9
 ```
 
-## .bashrc vs .bash_profile vs .profile
+### .bashrc vs .bash_profile vs .profile
 
-These three files are shell startup files used by Bash (and other POSIX shells) to configure your shell environment. The main difference is when they are executed and depends on login shell vs. interactive non-login shell.
-
-### The core distinction
+The main difference is *when* they are executed, depending on login shell vs. interactive non-login shell.
 
 | Shell Type | When It Happens | Startup File Read | Examples | Typical Use Cases |
 |------------|-----------------|-------------------|-----------|-------------------|
-| Login shell | When you log into a system for the first time | `.bash_profile` (or `.bash_login`, or `.profile` if neither exists) | SSH login (`ssh user@host`), Linux TTY login (`Ctrl + Alt + F3`), `su - user`, `sudo -i`, macOS Terminal (default) | Set environment variables (`PATH`, `JAVA_HOME`, `EDITOR`, `LANG`), initialize login-specific settings, then source `.bashrc` |
-| Interactive non-login shell | Every time a new interactive Bash session starts after login | `.bashrc` | Opening a new Terminal window or tab on most Linux desktops, VS Code integrated terminal, GNOME Terminal, Konsole, running `bash` | Configure aliases, shell prompt (`PS1`), shell options (`shopt`), history settings, functions, tab completion, Git shortcuts |
-| Non-interactive shell | When Bash executes a script without user interaction | None (unless `BASH_ENV` is set) | `./script.sh`, `bash script.sh`, scripts executed by CI/CD pipelines, cron jobs | Scripts should define everything they need themselves; do not rely on `.bashrc` or `.bash_profile` being loaded automatically |
-
-### Startup file comparison
+| Login shell | Logging into a system for the first time | `.bash_profile` (or `.bash_login`, or `.profile` if neither exists) | SSH login, TTY login (`Ctrl+Alt+F3`), `su - user`, `sudo -i`, macOS Terminal (default) | Set environment variables (`PATH`, `JAVA_HOME`, `EDITOR`, `LANG`), then source `.bashrc` |
+| Interactive non-login shell | Every new interactive Bash session after login | `.bashrc` | New Terminal window/tab, VS Code integrated terminal, GNOME Terminal, Konsole, running `bash` | Aliases, prompt (`PS1`), shell options (`shopt`), history settings, functions, tab completion |
+| Non-interactive shell | Bash executes a script without user interaction | None (unless `BASH_ENV` is set) | `./script.sh`, `bash script.sh`, CI/CD pipelines, cron jobs | Scripts should define everything they need themselves |
 
 | File | Executed When | Shell Specific | Common Contents | Should Contain |
 |------|---------------|----------------|-----------------|----------------|
-| `.bashrc` | Every interactive non-login Bash shell | Bash only | Aliases, functions, prompt customization, history settings, shell options, command completion | Interactive shell customizations that you want available in every terminal |
-| `.bash_profile` | Login Bash shell only | Bash only | Environment variables, startup commands, login-specific initialization | `export` statements and a command to source `.bashrc` |
-| `.profile` | Login shell if `.bash_profile` and `.bash_login` do not exist | POSIX-compliant shells (`sh`, `dash`, `bash`, `ksh`, etc.) | Generic environment variables and shell-independent settings | Portable login configuration that works across different shells |
+| `.bashrc` | Every interactive non-login Bash shell | Bash only | Aliases, functions, prompt, history settings, shell options, completion | Interactive customizations wanted in every terminal |
+| `.bash_profile` | Login Bash shell only | Bash only | Environment variables, startup commands, login-specific init | `export` statements + sourcing `.bashrc` |
+| `.profile` | Login shell if `.bash_profile`/`.bash_login` don't exist | POSIX-compliant shells (`sh`, `dash`, `bash`, `ksh`, etc.) | Generic environment variables, shell-independent settings | Portable login configuration |
 
 ```bash
 # Typical flow when you SSH into a server:
@@ -333,43 +310,41 @@ if [ -f ~/.bashrc ]; then
 fi
 ```
 
-This is why the common convention is:
-- Put your actual settings (aliases, $PATH, prompt customization, functions) in `.bashrc`
-- Make `.bash_profile` just a redirect that sources `.bashrc`
-- That way, whichever one loads, you still get the same environment
+Common convention: put actual settings (aliases, `$PATH`, prompt, functions) in `.bashrc`; make `.bash_profile` just a redirect that sources `.bashrc`. `.profile` is the shell-agnostic fallback used by `sh`.
 
-`.profile` is the shell-agnostic fallback - used by `sh`, and read by bash only if `.bash_profile` and `.bash_login` don't exist. Distros that ship a minimal shell setup (or non-bash default shells) often rely on this instead.
-
-Practical rule for a beginner:
 ```bash
 # Put permanent aliases, PATH changes, and prompt tweaks here:
 nano ~/.bashrc
 
 # Then reload without restarting the terminal:
 source ~/.bashrc
-```
 
-Quick way to check which one actually ran:
-```bash
+# Quick way to check which one actually ran:
 echo "bashrc loaded" >> ~/.bashrc
 echo "bash_profile loaded" >> ~/.bash_profile
 # open a new terminal and see which message(s) print
 ```
 
-## What is the difference between ls, ls -l, and ls -a?
+---
 
-These are all variations of the list directory contents command, each revealing different levels of detail.
+## File & Directory Commands
+
+### ls — List Files and Directories
+
+```bash
+ls [OPTIONS] [FILE/DIRECTORY]
+```
 
 | Command | Description |
 |---------|-------------|
 | `ls` | Lists files in current directory (names only) |
-| `ls -l` | Long listing format - shows permissions, ownership, size, modified time |
+| `ls -l` | Long listing format — permissions, ownership, size, modified time |
 | `ls -a` | Shows all files including hidden ones (files starting with `.`) |
-| `ls -la` | Combines both: long format + hidden files |
+| `ls -la` / `ls -lah` | Combines long format + hidden files (+ human-readable sizes) |
 | `ls -lh` | Long format with human-readable file sizes (KB, MB, GB) |
 | `ls -lt` | Long format sorted by modification time (newest first) |
 
-Example output of ls -l:
+Example output of `ls -l`:
 ```bash
 $ ls -l
 -rwxr-xr-- 1 hitesh devops 4096 Jun 10 09:30 script.sh
@@ -377,31 +352,174 @@ drwxr-xr-x 2 hitesh devops 4096 Jun 09 14:00 projects
 ```
 
 Reading the columns left to right:
-1. `-rwxr-xr--` -> File type + permissions
-2. `1` -> Number of hard links
-3. `hitesh` -> Owner name
-4. `devops` -> Group name
-5. `4096` -> File size in bytes
-6. `Jun 10 09:30` -> Last modification timestamp
-7. `script.sh` -> File name
+1. `-rwxr-xr--` → File type + permissions
+2. `1` → Number of hard links
+3. `hitesh` → Owner name
+4. `devops` → Group name
+5. `4096` → File size in bytes
+6. `Jun 10 09:30` → Last modification timestamp
+7. `script.sh` → File name
 
-Example: Show all files including hidden:
 ```bash
 $ ls -a
 .  ..  .bashrc  .profile  script.sh  projects
 ```
+`.bashrc` and `.profile` are hidden config files — they start with a dot (`.`).
 
-`.bashrc` and `.profile` are hidden config files - they start with a dot (`.`).
+**Interview Q&A**
+- *Difference between `ls` and `ls -l`?* `ls` only shows names. `ls -l` shows detailed information.
+- *What does `ls -a` show?* Hidden files starting with `.`.
 
+### cat — View / Access Files
+
+```bash
+cat -- "--spaces in this filename--"   # View file --spaces in this filename--
+cat ./-file07                          # View file -file07 (without "./" it errors)
+cat notes.txt                          # Display file
+cat > file.txt                         # Create file: type content, then Ctrl+D
+cat file1 file2 > combined.txt         # Merge files
+cat -n file.txt                        # Number lines
+```
+> *cat vs less?* `cat` prints everything. `less` shows one page at a time.
+
+### less — Page Through Large Files
+
+```bash
+less server.log
+```
+Navigation: `Up`/`Down` arrows, `Space`/`Page Down`, `Page Up`, `/` search, `q` quit.
+> Why use `less`? Large log files — doesn't load the whole file into memory.
+
+### diff — Compare Files
+
+```bash
+diff passwords.old passwords.new        # Compare the Two Files
+```
+
+### cp — Copy Files and Directories
+
+```bash
+cp [OPTIONS] SOURCE DESTINATION
+
+cp file.txt backup.txt      # Copy file
+cp -r project backup/       # Copy directory (recursive; without -r: "omitting directory")
+cp -p file.txt backup.txt   # Preserve ownership, timestamps, permissions
+cp -v file.txt backup.txt   # Verbose: 'file.txt' -> 'backup.txt'
+cp report{,.bak}            # expands to: cp report report.bak
+```
+> Why is `-r` required? Directories contain subdirectories/files — recursive mode copies everything.
+
+### mv — Move or Rename
+
+```bash
+mv SOURCE DESTINATION
+
+mv old.txt new.txt                          # Rename file
+mv report.pdf /home/user/Documents/         # Move file
+mv *.txt backup/                            # Move multiple files
+mv project old_project                      # Rename directory
+mv file?.txt archive/                       # only single-char-suffix files
+```
+
+### rm / rmdir — Remove Files & Directories
+
+```bash
+rm [OPTIONS] FILE
+
+rm notes.txt              # Delete file
+rm -r folder/             # Delete directory
+rm -f file.txt            # Force delete, no confirmation
+rm -rf directory/         # Recursive + force — permanently deletes, no recycle bin
+rm -ri folder             # Safe alternative: asks before deletion
+rm backup_*.tar.gz        # delete all matching backups (glob)
+```
+| Option | Description |
+|----------|-------------|
+| `-r` | Recursive |
+| `-f` | Force delete |
+
+```bash
 rmdir empty_folder          # removes directory only if it's empty
 rmdir -p a/b/c              # removes nested empty directories
 # For non-empty directories, use rm -r instead
+```
+> Why is `rm -rf` dangerous? It permanently deletes files without confirmation.
 
-## What does chmod do?
+### mkdir / mktemp — Create Directories
 
-`chmod` stands for Change Mode. It modifies the read, write, and execute permissions for files and directories.
+```bash
+mkdir directory_name          # Create single directory
+mkdir dir1 dir2 dir3          # Create multiple directories
+mkdir -p project/src/java     # Create nested directories (creates parent dirs automatically)
 
-### Permission Bits Explained
+mktemp -d                     # Create temporary directory
+cd /tmp/tmp.r4mK9sL1Qa
+```
+> Without `-p`: `No such file or directory`.
+
+### touch — Create Empty Files / Update Timestamps
+
+```bash
+touch filename
+touch notes.txt              # Create empty file
+touch a.txt b.txt c.txt      # Create multiple files
+touch existing.txt           # Update modification time (doesn't overwrite content)
+```
+
+### file / find — Identify & Locate Files
+
+```bash
+file ./*                              # Shows types like data, ASCII text, Key
+find [path] [options] [expression]
+
+# Find by name
+find / -name "file.txt"               # Find anywhere on system
+find /home -name "*.sh"               # Find all shell scripts
+find /var -name "*.log"               # Find all log files
+find . -name "config*"                # Find files starting with config
+
+# Find by type
+find /tmp -type f                     # Files only
+find /home -type d                    # Directories only
+find / -type l                        # Symbolic links only
+
+# Find by size
+find /var -size +10M                  # Files larger than 10MB
+find /home -size -1k                  # Files smaller than 1KB
+find / -size +100M -size -1G          # Between 100MB and 1GB
+
+# Find by time
+find /tmp -mtime -1                   # Modified in last 24 hours
+find /logs -mtime +30                 # Not modified in 30+ days
+find /home -newer reference.txt       # Newer than a specific file
+
+# Find by permissions
+find / -perm 777                      # Files with 777 permissions
+find / -perm -u=s                     # SUID files (security audit)
+
+# Find by owner
+find /home -user hitesh               # Files owned by hitesh
+find /var -group www-data             # Files owned by group www-data
+
+# Execute action on found files
+find /tmp -name "*.tmp" -delete            # Delete all .tmp files
+find /logs -name "*.log" -exec cat {} \;   # Cat each found file
+find /home -type f -exec chmod 644 {} \;   # Fix permissions
+
+# Other examples
+find . -type f -size 1033c ! -executable                  # human-readable, 1033 bytes, not executable
+find / -type f -user bandit7 -group bandit6 -size 33c 2>/dev/null
+```
+
+### Soft Link (Symbolic) vs Hard Link — See [Links](#links-soft-vs-hard)
+
+---
+
+## Permissions & Ownership
+
+### chmod — Change Mode
+
+`chmod` modifies read, write, and execute permissions for files and directories.
 
 | Symbol | Octal | Meaning |
 |--------|-------|---------|
@@ -410,8 +528,6 @@ rmdir -p a/b/c              # removes nested empty directories
 | `x` | 1 | Execute |
 | `-` | 0 | No permission |
 
-### Octal Permission Examples
-
 | Octal | Symbolic | Meaning |
 |-------|----------|---------|
 | `755` | `rwxr-xr-x` | Owner: full, Group+Others: read+execute |
@@ -419,17 +535,13 @@ rmdir -p a/b/c              # removes nested empty directories
 | `700` | `rwx------` | Owner: full, Group+Others: no access |
 | `777` | `rwxrwxrwx` | Everyone: full access (avoid in production!) |
 
-### Usage Examples
-
 ```bash
 # Numeric method
 chmod 755 script.sh       # Owner: rwx, Group: r-x, Others: r-x
 chmod 644 config.txt      # Owner: rw-, Group: r--, Others: r--
 chmod 700 private.sh      # Only owner can read, write, execute
 
-# Symbolic method
-
-# Add Permissions (+)
+# Symbolic — Add Permissions (+)
 chmod u+x script.sh           # Add execute permission for owner
 chmod u+w notes.txt           # Add write permission for owner
 chmod g+w project.txt         # Add write permission for group
@@ -441,7 +553,7 @@ chmod a+r file.txt            # Add read permission for everyone
 chmod ug+w shared.txt         # Add write permission to owner and group
 chmod go+r document.txt       # Add read permission to group and others
 
-# Remove Permissions (-)
+# Symbolic — Remove Permissions (-)
 chmod u-w file.txt            # Remove write permission from owner
 chmod u-x script.sh           # Remove execute permission from owner
 chmod g-w project.txt         # Remove write permission from group
@@ -451,7 +563,7 @@ chmod o-w public.txt          # Remove write permission from others
 chmod a-x script.sh           # Remove execute permission from everyone
 chmod a-w readonly.txt        # Remove write permission from everyone
 
-# Set Exact Permissions (=)
+# Symbolic — Set Exact Permissions (=)
 chmod u=rwx file.sh           # Owner: read, write, execute
 chmod u=rw file.txt           # Owner: read and write only
 chmod g=rx script.sh          # Group: read and execute only
@@ -475,25 +587,27 @@ chmod -R u+rwx project/       # Give owner full permissions recursively
 chmod -R g+rw shared/         # Give group read and write recursively
 chmod -R o-r private/         # Remove read permission for others recursively
 chmod -R a+X scripts/         # Add execute only to directories and executable files
+chmod -R 755 /var/www/html    # Apply to directory and all contents
+```
 
-# Recursive (apply to directory and all contents)
-chmod -R 755 /var/www/html
+> Interview tip: `755` is common for scripts/directories; `644` is standard for regular files.
 
-# Every file has an owner (user) and a group. chmod controls WHAT each can do (r/w/x).
-# chown and chgrp control WHO the owner/group actually are.
+### chown / chgrp — Change Ownership
 
+Every file has an owner (user) and a group. `chmod` controls WHAT each can do (r/w/x). `chown`/`chgrp` control WHO the owner/group actually are.
+
+```bash
 chown hitesh file.txt         # change owner
 chown hitesh:devops file.txt  # change owner AND group
 chgrp devops file.txt         # change group only
 chown -R hitesh:devops dir/   # recursive
 ```
 
-Interview tip: Always explain that `755` is common for scripts/directories, and `644` is standard for regular files.
-
-## What is umask?
+### umask
 
 `umask` sets the default permissions removed when new files/directories are created.
 
+```bash
 umask            # show current umask, e.g. 0022
 
 # Default max permissions:
@@ -503,8 +617,148 @@ umask            # show current umask, e.g. 0022
 
 umask 027         # more restrictive default
 umask 0022        # typical default
+```
 
-## How to connect using SSH?
+### Symbolic Permission Format
+
+```text
+-rwxr-xr--
+File type: - (file), d (dir), l (link), c (char), b (block)
+Owner (user):   rwx  = 7
+Group:          r-x  = 5
+Others (world): r--  = 4
+```
+
+| Character | Meaning |
+|-----------|---------|
+| `-` | Regular file |
+| `d` | Directory |
+| `l` | Symbolic link |
+| `c` | Character device |
+| `b` | Block device |
+| `p` | Named pipe |
+| `s` | Socket |
+
+### Special Permissions
+
+```bash
+# SUID (Set User ID) - runs as file owner, not current user
+chmod u+s /usr/bin/passwd
+# Shows as: -rwsr-xr-x
+
+# SGID (Set Group ID) - files inherit group of directory
+chmod g+s /shared/folder
+# Shows as: drwxr-sr-x
+
+# Sticky Bit - only owner can delete their own files
+chmod +t /tmp
+# Shows as: drwxrwxrwt
+```
+
+---
+
+## Users, Groups & Access
+
+### User Management
+
+```bash
+# Add user
+useradd hitesh                         # Create user
+useradd -m -s /bin/bash hitesh         # With home dir and bash shell
+passwd hitesh                          # Set password
+
+# Modify user
+usermod -aG sudo hitesh                # Add to sudo group
+usermod -s /bin/zsh hitesh             # Change shell
+usermod -d /new/home hitesh            # Change home directory
+usermod -l newhitesh hitesh            # Rename user
+
+# Delete user
+userdel hitesh                         # Delete user (keep home)
+userdel -r hitesh                      # Delete user + home directory
+
+# View user info
+id hitesh                              # UID, GID, groups
+cat /etc/passwd | grep hitesh          # User entry
+groups hitesh                          # Group memberships
+```
+
+### Group Management
+
+```bash
+groupadd developers              # create a new group
+groupdel developers              # delete a group
+groupmod -n newname oldname      # rename a group
+gpasswd -a hitesh developers     # add existing user to a group
+```
+
+### /etc/passwd, /etc/shadow, /etc/group
+
+```text
+/etc/passwd - one line per user, colon-separated:
+username:x:UID:GID:comment:home_dir:shell
+
+/etc/shadow - stores hashed passwords (root-only readable):
+username:hashed_password:last_changed:min:max:warn
+
+/etc/group - one line per group:
+groupname:x:GID:member1,member2
+```
+
+```bash
+cat /etc/passwd | grep hitesh
+cat /etc/group | grep sudo
+sudo cat /etc/shadow
+
+passwd hitesh          # set/change password for user hitesh
+passwd -l hitesh       # lock account (disable login)
+passwd -u hitesh       # unlock account
+chage -l hitesh        # show password expiry info
+chage -M 90 hitesh     # force password change every 90 days
+```
+
+### su vs sudo -i
+
+```bash
+su username        # switch user, needs THEIR password, keeps some of your env
+su - username       # switch user with full login environment (like a fresh login)
+sudo -i             # switch to root using YOUR password, full root login environment
+sudo -s             # switch to root shell but keep current environment
+```
+
+### who, w, last, lastlog
+
+```bash
+who              # who is currently logged in
+w                # who is logged in + what they're doing
+last             # history of past logins
+lastlog          # last login time for each user
+```
+
+### sudo — Superuser Do
+
+Allows a permitted user to run commands as root without fully switching to the root account.
+- Safer — limits damage from mistakes
+- Auditable — all `sudo` commands are logged in `/var/log/auth.log`
+- Granular — control which commands each user can run
+
+```bash
+sudo apt update               # Update package list (requires root)
+sudo systemctl restart nginx  # Restart service
+sudo nano /etc/hosts          # Edit protected system file
+sudo -i                       # Switch to root shell (interactive)
+sudo -u postgres psql         # Run command as specific user (postgres)
+sudo !!                       # Re-run last command with sudo
+
+# Grant sudo access
+usermod -aG sudo hitesh       # Ubuntu/Debian: add user to sudo group
+usermod -aG wheel hitesh      # RHEL/CentOS: add user to wheel group
+
+# Check sudo privileges
+sudo -l          # List what the current user can run with sudo
+```
+
+### SSH
 
 ```bash
 ssh -p port_number username@hostname
@@ -522,27 +776,24 @@ chmod 600 sshkey.private
 ssh -i sshkey.private -p port_number username@hostname
 ```
 
-## How to view the first and last lines of a file?
+---
 
-### head - View beginning of a file
+## Searching & Text Processing
+
+### head / tail — Beginning / End of a File
 
 ```bash
 head filename.txt          # Shows first 10 lines (default)
-head -n 20 filename.txt    # Shows first 20 lines (using "-n" is more portable for POSIX-compliant systems)
+head -n 20 filename.txt    # Shows first 20 lines (POSIX-portable form)
 head -5 filename.txt       # Shows first 5 lines
-```
 
-### tail - View end of a file
-
-```bash
 tail filename.txt          # Shows last 10 lines (default)
 tail -n 20 filename.txt    # Shows last 20 lines
 tail -f /var/log/syslog    # Follow mode: real-time log monitoring
 tail -F /var/log/app.log   # Follow mode + retry if file is recreated
 ```
 
-### Practical use case - Monitor logs in real time
-
+Practical use:
 ```bash
 # Watch nginx access log live
 tail -f /var/log/nginx/access.log
@@ -550,24 +801,17 @@ tail -f /var/log/nginx/access.log
 # Watch last 50 lines + follow
 tail -n 50 -f /var/log/syslog
 
-# Combine head and tail to view middle of file
-# View lines 20-30 of a file:
+# Combine head and tail to view middle of file (lines 20-30)
 head -30 file.txt | tail -11
 ```
 
-## How to search a string in files using grep?
-
-`grep` stands for Global Regular Expression Print. It searches for patterns in files or input.
-
-### Basic Syntax
+### grep — Global Regular Expression Print
 
 ```bash
 grep "pattern" filename
 grep "pattern" file1 file2     # Search in multiple files
 grep "pattern" *.log           # Search in all .log files
 ```
-
-### Important Flags
 
 | Flag | Description |
 |------|-------------|
@@ -581,8 +825,6 @@ grep "pattern" *.log           # Search in all .log files
 | `-A n` | Show n lines After match |
 | `-B n` | Show n lines Before match |
 | `-E` | Extended regex (same as `egrep`) |
-
-### Common grep Examples
 
 ```bash
 # Basic search
@@ -617,8 +859,7 @@ grep -l "TODO" *.py                # Files containing TODO
 grep --color=auto "error" app.log
 ```
 
-### Using grep with Other Commands
-
+Using grep with other commands:
 ```bash
 ps -ef | grep nginx                # Find running process
 history | grep docker              # Search command history
@@ -628,8 +869,7 @@ ls -l | grep ".txt"                # Filter files by extension
 cat /etc/passwd | grep root        # Find root user entry
 ```
 
-### Common Regular Expression Examples
-
+Common regex examples:
 ```bash
 grep "^root" /etc/passwd           # Starts with "root"
 grep "bash$" /etc/passwd           # Ends with "bash"
@@ -639,412 +879,145 @@ grep "[A-Z]" file.txt              # Contains uppercase letters
 grep -E "colou?r" file.txt         # Match "color" or "colour"
 ```
 
-## What does df -h show?
-
-`df` stands for Disk Free. It reports disk space usage of filesystems.
+### wc — Word Count
 
 ```bash
-df -h       # Human-readable (KB, MB, GB)
-df -H       # Same but uses 1000 instead of 1024
-df -T       # Show filesystem type
-df -i       # Show inode usage instead of space
-df -hT      # Combine: human-readable + filesystem type
+wc [OPTIONS] file
+
+wc -l file.txt   # Count lines
+wc -w file.txt   # Count words
+wc -m file.txt   # Count characters
+wc -c file.txt   # Count bytes
 ```
+> *What does `wc -l` return?* Total number of lines.
 
-Example output:
-```bash
-$ df -h
-Filesystem      Size  Used Avail Use% Mounted on
-/dev/sda1        50G   20G   30G  40% /
-tmpfs           1.9G     0  1.9G   0% /dev/shm
-/dev/sdb1       100G   80G   20G  80% /data
-```
-
-Reading the columns:
-- Filesystem - Device or partition
-- Size - Total size
-- Used - Space used
-- Avail - Available space
-- Use% - Percentage used
-- Mounted on - Where it is accessible
-
-Pro tip: When `Use%` hits 90%+ on `/` (root), your system may start having issues. This is commonly checked in disk alert scripts.
-
-## What is the difference between ps and top?
-
-Both commands deal with process monitoring, but serve different purposes.
-
-| Feature | `ps` | `top` |
-|---------|------|-------|
-| View type | Static snapshot | Dynamic real-time |
-| Auto-refresh | No | Yes (every 3 seconds) |
-| Interactive | No | Yes (press keys to interact) |
-| Use case | Quick one-time check | Ongoing monitoring |
-
-### ps - Process Snapshot
+### sort / uniq
 
 ```bash
-ps              # Processes in current shell
-ps -e           # All processes on system
-ps -ef          # Full format: UID, PID, PPID, CPU, start time
-ps -ef | grep nginx    # Find specific process
-ps aux          # BSD format: user, CPU%, MEM%, command
-ps aux --sort=-%cpu    # Sort by CPU usage (descending)
-ps aux --sort=-%mem    # Sort by memory usage
+sort file.txt        # Alphabetical sort
+sort -r names.txt     # Reverse
+sort -n numbers.txt   # Numeric
+sort -u file.txt      # Remove duplicates
 ```
-
-Example output of ps -ef:
-```
-UID        PID  PPID  C STIME TTY          TIME CMD
-root         1     0  0 09:01 ?        00:00:03 /sbin/init
-hitesh    1234  1200  0 09:05 pts/0    00:00:00 bash
-```
-
-### top - Interactive Process Monitor
+> *sort vs sort -n?* `sort` is alphabetical, `sort -n` is numeric.
 
 ```bash
-top             # Launch top
-# While inside top:
-# q = quit
-# k = kill a process (enter PID)
-# M = sort by memory
-# P = sort by CPU
-# u = filter by user
-# 1 = show per-CPU stats
+uniq file.txt         # Removes adjacent duplicate lines
+uniq -c file.txt       # Count duplicates
+uniq -u file.txt       # Remove non-unique lines
+
+# Usually used with sort, since uniq only removes ADJACENT duplicates:
+sort file.txt | uniq
 ```
 
-Alternative: `htop` is a more user-friendly, colored version of `top`. Install with: `apt install htop`
+Example:
+```text
+Input:              Output (uniq):        Output (uniq -c):
+apple                apple                 2 apple
+apple                banana                2 banana
+banana               orange                1 orange
+banana
+orange
+```
 
-## What is sudo?
-
-`sudo` stands for Superuser Do. It allows a permitted user to run commands as root (administrator) without fully switching to the root account.
-
-### Why use sudo instead of logging in as root?
-
-- Safer - limits damage from mistakes
-- Auditable - all `sudo` commands are logged in `/var/log/auth.log`
-- Granular - you can control which commands each user can run
-
-### Examples
+### cut
 
 ```bash
-sudo apt update               # Update package list (requires root)
-sudo systemctl restart nginx  # Restart service
-sudo nano /etc/hosts          # Edit protected system file
-sudo -i                       # Switch to root shell (interactive)
-sudo -u postgres psql         # Run command as specific user (postgres)
-sudo !!                       # Re-run last command with sudo
-```
+cut [OPTIONS] file
 
-### How to grant sudo access
+cut -d: -f1 /etc/passwd    # Extract first field (delimiter ":")
+cut -d, -f2 employee.csv   # CSV example: extract 2nd field
+```
+| Option | Meaning |
+|----------|----------|
+| `-d` | Delimiter |
+| `-f` | Field |
+
+### awk
+
+Powerful text-processing language.
 
 ```bash
-# Add user to sudo group (Ubuntu/Debian)
-usermod -aG sudo hitesh
-
-# Add user to wheel group (RHEL/CentOS)
-usermod -aG wheel hitesh
+awk '{print $1}' file.txt          # Print first column
+awk '{print $1,$2}'                # Print multiple columns
+awk '{print $NF}'                  # Print last column (NF = Number of Fields)
+awk '{sum+=$2} END {print sum}'    # Sum numbers
+awk '$3>100'                       # Filter
 ```
+> *Why is awk powerful?* It can filter, calculate, format, search, parse, and generate reports.
 
-### Check sudo privileges
+### sed — Stream Editor
 
 ```bash
-sudo -l          # List what the current user can run with sudo
+sed 's/old/new/' file.txt          # Replace first occurrence per line
+sed 's/old/new/g' file.txt         # Replace all (g = Global)
+sed -i 's/old/new/g' file.txt      # Edit file directly
+sed '3d' file.txt                  # Delete line 3
+sed -n '5p' file.txt               # Print only line 5
+sed 's/[0-9]/X/g'                  # Replace using regex
 ```
+
+*sed vs awk:*
+
+| sed | awk |
+|------|------|
+| Stream editor | Programming language |
+| Best for replacing text | Best for parsing structured data |
+| Line-oriented editing | Field-oriented processing |
+| Supports regex | Supports variables, conditions, loops, arithmetic |
+
+### tr — Translate Characters
 
 ```bash
-groupadd developers              # create a new group
-groupdel developers               # delete a group
-groupmod -n newname oldname       # rename a group
-gpasswd -a hitesh developers      # add existing user to a group
+echo "abc" | tr 'abc' 'xyz'                        # xyz
+cat data.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'          # Alphabet rotated by 13 positions
+tr 'A-Za-z' 'N-ZA-Mn-za-m' < data.txt
 ```
 
-## What are /etc/passwd, /etc/shadow, /etc/group?
+### strings
 
-/etc/passwd - one line per user, colon-separated:
-username:x:UID:GID:comment:home_dir:shell
-
-/etc/shadow - stores hashed passwords (root-only readable):
-username:hashed_password:last_changed:min:max:warn
-
-/etc/group - one line per group:
-groupname:x:GID:member1,member2
-
-cat /etc/passwd | grep hitesh
-cat /etc/group | grep sudo
-sudo cat /etc/shadow
-
-passwd hitesh          # set/change password for user hitesh
-passwd -l hitesh        # lock account (disable login)
-passwd -u hitesh        # unlock account
-chage -l hitesh          # show password expiry info
-chage -M 90 hitesh       # force password change every 90 days
-
-## su vs sudo -i
-
-su username        # switch user, needs THEIR password, keeps some of your env
-su - username       # switch user with full login environment (like a fresh login)
-sudo -i             # switch to root using YOUR password, full root login environment
-sudo -s             # switch to root shell but keep current environment
-
-## who, w, last, lastlog
-
-who              # who is currently logged in
-w                # who is logged in + what they're doing
-last             # history of past logins
-lastlog          # last login time for each user
-
-## How do you check system logs?
-
-Linux stores logs in `/var/log/` directory. Different services write to different files.
-
-### Common Log Files
-
-| Log File | Purpose |
-|----------|---------|
-| `/var/log/syslog` | General system messages (Debian/Ubuntu) |
-| `/var/log/messages` | General system messages (RHEL/CentOS) |
-| `/var/log/auth.log` | Authentication, SSH logins, sudo usage |
-| `/var/log/kern.log` | Kernel messages |
-| `/var/log/dmesg` | Hardware detection at boot |
-| `/var/log/nginx/access.log` | Nginx web server access |
-| `/var/log/nginx/error.log` | Nginx errors |
-| `/var/log/dpkg.log` | Package install/remove history (Debian) |
-
-### Commands
+Extracts printable strings from binary files.
 
 ```bash
-tail -f /var/log/syslog           # Follow real-time
-tail -100 /var/log/auth.log       # Last 100 lines
-grep "Failed" /var/log/auth.log   # Find failed SSH attempts
-cat /var/log/syslog | less        # Scroll through logs
-dmesg                             # Kernel ring buffer (boot messages)
-dmesg | grep -i error              # Kernel errors
-journalctl                        # systemd journal (all logs)
-journalctl -u nginx               # Logs for specific service
-journalctl -f                     # Follow mode (like tail -f)
-journalctl --since "2024-01-01"   # Logs since a date
-journalctl -p err                 # Only error-level and above
+strings data.txt | grep "==="        # Shows human-readable strings preceded by several '=' characters
 ```
 
-## What is the difference between soft link and hard link?
-
-Both are ways to reference a file, but they work very differently under the hood.
-
-| Feature | Soft Link (Symbolic) | Hard Link |
-|---------|---------------------|-----------|
-| Points to | File name/path | File inode (actual data) |
-| Breaks if original deleted | Yes (dangling link) | No (data persists) |
-| Can link directories | Yes | No |
-| Cross filesystem links | Yes | No |
-| Shows as separate file type | `l` in `ls -l` | Appears identical |
-| File size shown | Size of path string | Size of actual file |
-
-### Create links
+### Common Command Combinations
 
 ```bash
-# Soft Link (Symbolic Link)
-ln -s /path/to/original link_name
+# Find duplicate usernames
+cut -d: -f1 /etc/passwd | sort | uniq
 
-# Hard Link
-ln /path/to/original link_name
+# Count unique entries
+sort file.txt | uniq | wc -l
+
+# Replace text and save
+sed 's/Linux/Ubuntu/g' input.txt > output.txt
+
+# Print first column then sort
+awk '{print $1}' employees.txt | sort
+
+# Count occurrences
+sort file.txt | uniq -c
+
+# Find top 10 IPs with failed SSH attempts
+cat /var/log/auth.log | grep "Failed" | awk '{print $11}' | sort | uniq -c | sort -rn | head -10
 ```
 
-### Examples
+### Real-World Text-Processing Examples
 
 ```bash
-ln -s /var/www/html /home/hitesh/www
-# Creates a shortcut named 'www' pointing to /var/www/html.
-# Opening /home/hitesh/www actually accesses /var/www/html.
-
-ln -s /usr/bin/python3 /usr/bin/python
-# Creates another name (alias) for the python3 executable.
-
-ln important.txt backup_link.txt
-# Creates a hard link.
-# Both filenames point to the same file (same inode).
-# Editing either file changes the same data.
+cp -r myproject/ backup/                       # Backup a project
+mv app.log app.log.old                         # Rename a log file
+rm -rf /tmp/project/*                          # Delete temporary files
+less /var/log/syslog                           # View a large log file
+awk '{print $1}' access.log | sort | uniq      # Find unique IP addresses in a log
+sed -i 's/http:/https:/g' config.conf          # Replace "http" with "https" in a config file
 ```
 
-### View links
+---
 
-```bash
-ls -l
-# Soft links are displayed with -> showing the target path.
-# Example:
-# mysyslog -> /var/log/syslog
-
-ls -li
-# Displays inode numbers.
-# Hard-linked files have exactly the same inode number,
-# proving they are the same file with different names.
-
-readlink -f link_name
-# Prints the final absolute path that a soft link points to.
-```
-
-### Soft link example
-
-```bash
-$ ln -s /var/log/syslog mysyslog
-# Creates a symbolic link named "mysyslog".
-
-$ ls -l mysyslog
-lrwxrwxrwx 1 hitesh hitesh 15 Jun 10 10:00 mysyslog -> /var/log/syslog
-```
-
-## How to find files in Linux?
-
-The `find` command is a powerful tool to search for files based on various criteria.
-
-### Basic Syntax
-
-```bash
-find [path] [options] [expression]
-```
-
-### Common Examples
-
-```bash
-# Find by name
-find / -name "file.txt"               # Find anywhere on system
-find /home -name "*.sh"               # Find all shell scripts
-find /var -name "*.log"               # Find all log files
-find . -name "config*"                # Find files starting with config
-
-# Find by type
-find /tmp -type f                     # Files only
-find /home -type d                    # Directories only
-find / -type l                        # Symbolic links only
-
-# Find by size
-find /var -size +10M                  # Files larger than 10MB
-find /home -size -1k                  # Files smaller than 1KB
-find / -size +100M -size -1G         # Between 100MB and 1GB
-
-# Find by time
-find /tmp -mtime -1                   # Modified in last 24 hours
-find /logs -mtime +30                 # Not modified in 30+ days
-find /home -newer reference.txt       # Newer than a specific file
-
-# Find by permissions
-find / -perm 777                      # Files with 777 permissions
-find / -perm -u=s                     # SUID files (security audit)
-
-# Find by owner
-find /home -user hitesh               # Files owned by hitesh
-find /var -group www-data             # Files owned by group www-data
-
-# Execute action on found files
-find /tmp -name "*.tmp" -delete       # Delete all .tmp files
-find /logs -name "*.log" -exec cat {} \;   # Cat each found file
-find /home -type f -exec chmod 644 {} \;  # Fix permissions
-
-file ./*                              # Shows types like data, ASCII text, Key
-find . -type f -size 1033c ! -executable # Example to find file with human-readable, 1033 bytes in size and not executable
-find / -type f -user bandit7 -group bandit6 -size 33c 2>/dev/null
-```
-
-# Part 2 - Advanced Linux Commands
-
-## What is the difference between cron and at commands?
-
-Both schedule tasks, but for different use cases.
-
-| Feature | `cron` | `at` |
-|---------|--------|------|
-| Purpose | Recurring/scheduled tasks | One-time future tasks |
-| Config file | `/etc/crontab`, `/var/spool/cron/` | No config file |
-| Frequency | Runs repeatedly on schedule | Runs once at specified time |
-| Persistence | Survives reboots | Runs once and is done |
-| Use case | Backups, cleanups, monitoring | One-off maintenance task |
-
-### Cron Syntax
-
-```
-* * * * * command_to_execute
-| | | | |
-| | | | +-- Day of week (0=Sun, 6=Sat)
-| | | +---- Month (1-12)
-| | +------ Day of month (1-31)
-| +-------- Hour (0-23)
-+---------- Minute (0-59)
-```
-
-### Cron Examples
-
-```bash
-crontab -e    # Edit current user's cron jobs
-crontab -l    # List current user's cron jobs
-crontab -r    # Remove all cron jobs
-
-# Common cron schedules:
-0 1 * * *      /home/user/backup.sh     # Daily at 1:00 AM
-*/5 * * * *    /usr/bin/monitor.sh      # Every 5 minutes
-0 0 * * 0      /scripts/weekly.sh       # Every Sunday midnight
-0 9-17 * * 1-5 /scripts/workday.sh     # 9AM-5PM Mon-Fri (hourly)
-@reboot        /scripts/startup.sh      # Run at boot
-@daily         /scripts/daily.sh        # Alias for 0 0 * * *
-```
-
-### at Command
-
-```bash
-at 10:30 PM          # Schedule for 10:30 PM tonight
-at 2:00 AM tomorrow  # Tomorrow at 2 AM
-at now + 1 hour      # One hour from now
-at 09:00 06/15/2024  # Specific date and time
-
-# Usage (interactive)
-$ at 10:30 PM
-at> echo "Hello" > /tmp/test.txt
-at> <Ctrl+D>
-
-atq    # List pending at jobs
-atrm 3 # Remove job number 3
-```
-
-## Explain file permissions in symbolic format
-
-### Reading Permission String
-
-```
--rwxr-xr--
-File type: - (file), d (dir), l (link), c (char), b (block)
-Owner (user):   rwx  = 7
-Group:          r-x  = 5
-Others (world): r--  = 4
-```
-
-### File Type Characters
-
-| Character | Meaning |
-|-----------|---------|
-| `-` | Regular file |
-| `d` | Directory |
-| `l` | Symbolic link |
-| `c` | Character device |
-| `b` | Block device |
-| `p` | Named pipe |
-| `s` | Socket |
-
-### Special Permissions
-
-```bash
-# SUID (Set User ID) - runs as file owner, not current user
-chmod u+s /usr/bin/passwd
-# Shows as: -rwsr-xr-x
-
-# SGID (Set Group ID) - files inherit group of directory
-chmod g+s /shared/folder
-# Shows as: drwxr-sr-x
-
-# Sticky Bit - only owner can delete their own files
-chmod +t /tmp
-# Shows as: drwxrwxrwt
-```
-
-## How to check network connectivity?
+## Networking
 
 ```bash
 # Basic connectivity test
@@ -1058,7 +1031,7 @@ ip addr show eth0           # Show specific interface
 ip link show                # Show network interfaces and status
 hostname -I                 # Display all assigned IP addresses
 hostname -i                 # Display host IP address
-ifconfig                    # Older alternative (may need net-tools)
+ifconfig                    # Older alternative (may need net-tools) — deprecated, ip addr preferred
 
 # Routing
 ip route show               # Show routing table
@@ -1083,20 +1056,23 @@ host google.com             # Simple DNS lookup
 cat /etc/resolv.conf        # View configured DNS servers
 
 # Test specific ports
-nc -zv google.com 443       # Check if TCP port 443 is open
-telnet google.com 80        # Test TCP connection (if installed)
-nmap localhost -p 31000-32000        # Find Open ports within a range
-cat /etc/bandit_pass/bandit14 | nc localhost 30000        # Submitting the password to port 30000 on localhost.
-cat /etc/bandit_pass/bandit15 | openssl s_client -connect localhost:30001 -quiet        # Submit the password to port 30001 on localhost using SSL/TLS encryption.
-| Part        | Meaning                   |
-| ----------- | ------------------------- |
-| `openssl`   | OpenSSL command-line tool |
-| `s_client`  | SSL/TLS client            |
-| `-connect`  | Connect to a server       |
-| `localhost` | This machine              |
-| `30001`     | Server port               |
-| `-quiet`    | reduce/suppress extra TLS connection information    |
+nc -zv google.com 443                          # Check if TCP port 443 is open
+telnet google.com 80                           # Test TCP connection (if installed)
+nmap localhost -p 31000-32000                  # Find open ports within a range
+cat /etc/bandit_pass/bandit14 | nc localhost 30000   # Submit password to port 30000 on localhost
+cat /etc/bandit_pass/bandit15 | openssl s_client -connect localhost:30001 -quiet   # Submit password over SSL/TLS
+```
 
+| Part | Meaning |
+| ----------- | ------------------------- |
+| `openssl` | OpenSSL command-line tool |
+| `s_client` | SSL/TLS client |
+| `-connect` | Connect to a server |
+| `localhost` | This machine |
+| `30001` | Server port |
+| `-quiet` | reduce/suppress extra TLS connection information |
+
+```bash
 # Download a webpage (test HTTP/HTTPS)
 curl https://google.com     # Fetch webpage
 curl -I https://google.com  # Show only HTTP headers
@@ -1114,7 +1090,7 @@ ethtool eth0                # Display NIC speed, duplex, driver info
 # Socket and process information
 lsof -i                     # List processes using network
 lsof -i :80                 # Processes using port 80
-fuser 8080/tcp              # Process using TCP port 8080
+fuser 8080/tcp               # Process using TCP port 8080
 
 # Firewall
 iptables -L                 # List iptables firewall rules
@@ -1126,29 +1102,62 @@ systemctl status NetworkManager    # Check NetworkManager
 systemctl status networking        # Check networking service (Debian/Ubuntu)
 
 # View hosts configuration
-cat /etc/hosts              # Local hostname mappings
-hostname                    # Display hostname
-hostnamectl                 # Show hostname and system information
-hostnamectl set-hostname newname     # change system hostname permanently
+cat /etc/hosts                     # Local hostname mappings
+hostname                           # Display hostname
+hostnamectl                        # Show hostname and system information
+hostnamectl set-hostname newname   # Change system hostname permanently
 
 # Live network monitoring
 watch -n 1 ss -tuln         # Refresh listening ports every second
 watch -n 2 ip addr          # Watch IP address changes
 ```
 
-## What is tar used for?
+### Firewall (ufw / iptables)
 
-`tar` stands for Tape Archive. It bundles multiple files into a single archive (and optionally compresses it).
+```bash
+# UFW (Ubuntu)
+ufw status
+ufw allow 80/tcp
+ufw allow ssh
+ufw deny 3306
+ufw enable
 
-### zip and unzip
+# iptables
+iptables -L -n                 # List rules
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT   # Allow port 80
+iptables -A INPUT -j DROP      # Drop all other input
+```
 
-zip archive.zip file1.txt file2.txt      # create zip
-zip -r archive.zip folder/               # zip a directory recursively
-unzip archive.zip                        # extract
-unzip -l archive.zip                     # list contents without extracting
-unzip archive.zip -d /target/dir/        # extract to specific directory
+### ifconfig vs ip addr
 
-### Flags Explained
+```bash
+ifconfig  -> legacy command (net-tools package), still works on many systems but deprecated
+ip addr   -> modern replacement (iproute2 package), preferred on current distros
+
+ifconfig eth0            # old way to view interface info
+ip addr show eth0        # modern equivalent
+```
+
+### File Transfer (scp / rsync)
+
+```bash
+scp file.txt user@server:/path     # -r for directories, -P for custom port
+scp -r folder/ user@server:/path
+scp -P 2222 file.txt user@server:/path
+
+rsync -avz /src user@host:/dst
+# -a archive mode (preserves permissions/timestamps/symlinks)
+# -v verbose
+# -z compress during transfer
+```
+
+---
+
+## Archives & Compression
+
+### tar — Tape Archive
+
+Bundles multiple files into a single archive (and optionally compresses it).
 
 | Flag | Meaning |
 |------|---------|
@@ -1161,8 +1170,6 @@ unzip archive.zip -d /target/dir/        # extract to specific directory
 | `-J` | Compress with xz (.xz) |
 | `-t` | List contents without extracting |
 | `-C` | Extract to specific directory |
-
-### Examples
 
 ```bash
 # Create archives
@@ -1185,71 +1192,46 @@ tar -rvf backup.tar newfile.txt
 tar -xvf backup.tar home/user/file.txt
 ```
 
-## What are gunzip and bunzip2 commands in Linux?
+### zip / unzip
 
-gunzip and bunzip2 are Linux commands used to decompress (extract) files that have been compressed using different compression algorithms.
-
-### gunzip
-
-Purpose: Decompresses Gzip (`.gz`) files.
-Compression command: `gzip`
-Decompression command:
 ```bash
-gunzip file.gz
+zip archive.zip file1.txt file2.txt      # create zip
+zip -r archive.zip folder/               # zip a directory recursively
+unzip archive.zip                        # extract
+unzip -l archive.zip                     # list contents without extracting
+unzip archive.zip -d /target/dir/        # extract to specific directory
 ```
-Example:
+
+### gunzip / bunzip2
+
+- **gunzip**: decompresses Gzip (`.gz`) files, compressed with `gzip`
+- **bunzip2**: decompresses Bzip2 (`.bz2`) files, compressed with `bzip2`
+
 ```bash
 mv data data.gz
 gunzip data.gz
-```
 
-### bunzip2
-
-Purpose: Decompresses Bzip2 (`.bz2`) files.
-Compression command: `bzip2`
-Decompression command:
-```bash
-bunzip2 file.bz2
-```
-Example:
-```bash
 mv data data.bz2
 bunzip2 data.bz2
 ```
 
-### How to know which one to use
-
-Check the file type first:
+Check the file type first to know which to use:
 ```bash
 file data
+# data: gzip compressed data     -> use gunzip data.gz
+# data: bzip2 compressed data    -> use bunzip2 data.bz2
 ```
-Output:
-```text
-data: gzip compressed data
-```
-Use:
-```bash
-gunzip data.gz
-```
-Output:
-```text
-data: bzip2 compressed data
-```
-Use:
-```bash
-bunzip2 data.bz2
-```
-
-### Quick Comparison
 
 | Command | File Extension | Used For |
 | --------- | -------------- | ---------------------- |
 | `gunzip` | `.gz` | Gzip-compressed files |
 | `bunzip2` | `.bz2` | Bzip2-compressed files |
 
-## Difference between apt and yum/dnf?
+---
 
-These are package managers - tools that install, update, and remove software on Linux.
+## Package Management
+
+`apt` and `yum`/`dnf` install, update, and remove software on Linux.
 
 | Feature | `apt` | `yum` / `dnf` |
 |---------|-------|---------------|
@@ -1259,9 +1241,8 @@ These are package managers - tools that install, update, and remove software on 
 | Config location | `/etc/apt/` | `/etc/yum.repos.d/` |
 | Cache location | `/var/cache/apt/` | `/var/cache/yum/` |
 
-### apt Commands (Ubuntu/Debian)
-
 ```bash
+# apt (Ubuntu/Debian)
 apt update                    # Refresh package list
 apt upgrade                   # Upgrade all installed packages
 apt install nginx             # Install package
@@ -1271,11 +1252,8 @@ apt search "web server"       # Search for packages
 apt show nginx                # Show package details
 apt list --installed          # List installed packages
 apt autoremove                # Remove unused dependencies
-```
 
-### yum/dnf Commands (RHEL/CentOS/Fedora)
-
-```bash
+# yum/dnf (RHEL/CentOS/Fedora)
 yum update                    # Update all packages
 yum install nginx             # Install package
 yum remove nginx              # Remove package
@@ -1284,9 +1262,34 @@ yum info nginx                # Package details
 dnf install nginx             # dnf is modern replacement for yum
 ```
 
-## What is du command used for?
+---
 
-`du` stands for Disk Usage. It shows how much space files and directories consume.
+## System Monitoring & Resources
+
+### df — Disk Free
+
+```bash
+df -h       # Human-readable (KB, MB, GB)
+df -H       # Same but uses 1000 instead of 1024
+df -T       # Show filesystem type
+df -i       # Show inode usage instead of space
+df -hT      # Combine: human-readable + filesystem type
+```
+
+Example output:
+```bash
+$ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        50G   20G   30G  40% /
+tmpfs           1.9G     0  1.9G   0% /dev/shm
+/dev/sdb1       100G   80G   20G  80% /data
+```
+
+Reading the columns: Filesystem (device/partition) · Size (total) · Used · Avail · Use% · Mounted on.
+
+> Pro tip: when `Use%` hits 90%+ on `/` (root), your system may start having issues — commonly checked in disk alert scripts.
+
+### du — Disk Usage
 
 ```bash
 du -sh /var/log          # Human-readable size of /var/log
@@ -1300,50 +1303,7 @@ du -sh /var/log/*.log    # Size of individual log files
 du -h /home | sort -rh | head -10
 ```
 
-## What is strings command?
-
-It extracts printable strings from binary files.
-
-```bash
-strings data.txt | grep "==="        # Shows human-readable strings preceded by several '=' characters.
-```
-
-## What is SELinux?
-
-Security-Enhanced Linux (SELinux) is a mandatory access control (MAC) security framework built into the Linux kernel - primarily used in RHEL/CentOS systems.
-
-Traditional Linux uses Discretionary Access Control (DAC) - owner decides permissions. SELinux adds Mandatory Access Control (MAC) - system policy controls access regardless of owner.
-
-### SELinux Modes
-
-| Mode | Behavior |
-|------|----------|
-| `enforcing` | Actively blocks and logs policy violations |
-| `permissive` | Only logs violations (does NOT block) - used for debugging |
-| `disabled` | SELinux completely off |
-
-### Commands
-
-```bash
-getenforce              # Check current mode
-sestatus                # Full SELinux status
-setenforce 0            # Temporarily set to permissive (until reboot)
-setenforce 1            # Temporarily set to enforcing
-
-# Permanent change: edit /etc/selinux/config
-SELINUX=enforcing       # Options: enforcing, permissive, disabled
-
-# Check SELinux context of file
-ls -Z /var/www/html/index.html
-
-# Fix file context (common fix for web servers)
-restorecon -Rv /var/www/html/
-
-# View SELinux denials in audit log
-grep "denied" /var/log/audit/audit.log
-```
-
-## How to check system resource usage?
+### System Resource Overview
 
 ```bash
 # CPU and processes
@@ -1391,43 +1351,303 @@ sar -n DEV               # Network interface statistics
 
 # System information
 uname -a                 # Kernel and system information
-hostnamectl              # Hostname and OS information
-lsb_release -a           # Linux distribution details
-cat /etc/os-release      # OS release information
+hostnamectl               # Hostname and OS information
+lsb_release -a            # Linux distribution details
+cat /etc/os-release       # OS release information
 
 # Running services
-systemctl status         # List failed and loaded services
-systemctl --type=service # List all services
+systemctl status                                    # List failed and loaded services
+systemctl --type=service                            # List all services
 systemctl list-units --type=service --state=running
 
 # System logs
-journalctl               # View systemd logs
-journalctl -xe           # Recent errors
-dmesg                    # Kernel messages
+journalctl                # View systemd logs
+journalctl -xe             # Recent errors
+dmesg                      # Kernel messages
 
 # Open files
-lsof                     # List all open files
-lsof -p PID              # Files opened by a process
+lsof                      # List all open files
+lsof -p PID                # Files opened by a process
 
 # Hardware information
-lsmem                    # Memory layout
-lspci                    # PCI devices
-lsusb                    # USB devices
-dmidecode                # BIOS and hardware information (root)
+lsmem                     # Memory layout
+lspci                     # PCI devices
+lsusb                     # USB devices
+dmidecode                 # BIOS and hardware information (root)
 
 # Monitor commands continuously
-watch free -h            # Refresh memory usage
-watch df -h               # Refresh disk usage
-watch uptime              # Refresh system load
-watch ps aux               # Refresh process list
+watch free -h             # Refresh memory usage
+watch df -h                # Refresh disk usage
+watch uptime                # Refresh system load
+watch ps aux                 # Refresh process list
 ```
 
-## What is Base64?
+---
 
-Base64 is an encoding algorithm, not encryption.
+## Process Management
 
-Encoding: Converts data into a format that can be safely transmitted as text.
-Decoding: Converts the Base64 text back into the original data.
+### ps vs top
+
+| Feature | `ps` | `top` |
+|---------|------|-------|
+| View type | Static snapshot | Dynamic real-time |
+| Auto-refresh | No | Yes (every 3 seconds) |
+| Interactive | No | Yes (press keys to interact) |
+| Use case | Quick one-time check | Ongoing monitoring |
+
+```bash
+# ps - Process Snapshot
+ps              # Processes in current shell
+ps -e           # All processes on system
+ps -ef          # Full format: UID, PID, PPID, CPU, start time
+ps -ef | grep nginx    # Find specific process
+ps aux          # BSD format: user, CPU%, MEM%, command
+ps aux --sort=-%cpu    # Sort by CPU usage (descending)
+ps aux --sort=-%mem    # Sort by memory usage
+```
+
+Example output of `ps -ef`:
+```text
+UID        PID  PPID  C STIME TTY          TIME CMD
+root         1     0  0 09:01 ?        00:00:03 /sbin/init
+hitesh    1234  1200  0 09:05 pts/0    00:00:00 bash
+```
+
+```bash
+# top - Interactive Process Monitor
+top             # Launch top
+# While inside top:
+# q = quit
+# k = kill a process (enter PID)
+# M = sort by memory
+# P = sort by CPU
+# u = filter by user
+# 1 = show per-CPU stats
+```
+> Alternative: `htop` is a more user-friendly, colored version of `top`. Install with: `apt install htop`
+
+### Kill, Background & Foreground
+
+```bash
+# List processes
+ps -ef | grep nginx            # Find process
+ps aux --sort=-%cpu | head     # Top CPU consumers
+
+# Kill processes
+kill PID                       # Send SIGTERM (graceful)
+kill -9 PID                    # Send SIGKILL (force)
+kill -15 PID                   # Send SIGTERM explicitly
+killall nginx                  # Kill all processes named nginx
+pkill -u hitesh                # Kill all processes by user
+
+# Background/foreground
+command &                      # Run in background
+jobs                           # List background jobs
+fg %1                          # Bring job 1 to foreground
+bg %1                          # Send to background
+nohup command &                # Persist after logout
+
+# Suspend and resume
+Ctrl+Z              # suspend current foreground job
+bg                  # resume suspended job in background
+fg                  # bring background job to foreground
+disown %1            # remove job from shell's job table (keeps running after logout)
+```
+
+*kill vs pkill vs killall:*
+```bash
+kill PID              # kill by process ID
+pkill nginx            # kill by process name (pattern match)
+killall nginx          # kill all processes with exact name match
+```
+
+---
+
+## Scheduling (cron & at)
+
+| Feature | `cron` | `at` |
+|---------|--------|------|
+| Purpose | Recurring/scheduled tasks | One-time future tasks |
+| Config file | `/etc/crontab`, `/var/spool/cron/` | No config file |
+| Frequency | Runs repeatedly on schedule | Runs once at specified time |
+| Persistence | Survives reboots | Runs once and is done |
+| Use case | Backups, cleanups, monitoring | One-off maintenance task |
+
+### Cron Syntax
+
+```text
+* * * * * command_to_execute
+| | | | |
+| | | | +-- Day of week (0=Sun, 6=Sat)
+| | | +---- Month (1-12)
+| | +------ Day of month (1-31)
+| +-------- Hour (0-23)
++---------- Minute (0-59)
+```
+
+```bash
+crontab -e    # Edit current user's cron jobs
+crontab -l    # List current user's cron jobs
+crontab -r    # Remove all cron jobs
+
+# Common cron schedules:
+0 1 * * *      /home/user/backup.sh     # Daily at 1:00 AM
+*/5 * * * *    /usr/bin/monitor.sh      # Every 5 minutes
+0 0 * * 0      /scripts/weekly.sh       # Every Sunday midnight
+0 9-17 * * 1-5 /scripts/workday.sh      # 9AM-5PM Mon-Fri (hourly)
+@reboot        /scripts/startup.sh      # Run at boot
+@daily         /scripts/daily.sh        # Alias for 0 0 * * *
+```
+
+### at Command
+
+```bash
+at 10:30 PM          # Schedule for 10:30 PM tonight
+at 2:00 AM tomorrow  # Tomorrow at 2 AM
+at now + 1 hour      # One hour from now
+at 09:00 06/15/2024  # Specific date and time
+
+# Usage (interactive)
+$ at 10:30 PM
+at> echo "Hello" > /tmp/test.txt
+at> <Ctrl+D>
+
+atq    # List pending at jobs
+atrm 3 # Remove job number 3
+```
+
+---
+
+## Logs
+
+Linux stores logs in `/var/log/`. Different services write to different files.
+
+| Log File | Purpose |
+|----------|---------|
+| `/var/log/syslog` | General system messages (Debian/Ubuntu) |
+| `/var/log/messages` | General system messages (RHEL/CentOS) |
+| `/var/log/auth.log` | Authentication, SSH logins, sudo usage |
+| `/var/log/kern.log` | Kernel messages |
+| `/var/log/dmesg` | Hardware detection at boot |
+| `/var/log/nginx/access.log` | Nginx web server access |
+| `/var/log/nginx/error.log` | Nginx errors |
+| `/var/log/dpkg.log` | Package install/remove history (Debian) |
+
+```bash
+tail -f /var/log/syslog           # Follow real-time
+tail -100 /var/log/auth.log       # Last 100 lines
+grep "Failed" /var/log/auth.log   # Find failed SSH attempts
+cat /var/log/syslog | less        # Scroll through logs
+dmesg                             # Kernel ring buffer (boot messages)
+dmesg | grep -i error             # Kernel errors
+journalctl                        # systemd journal (all logs)
+journalctl -u nginx               # Logs for specific service
+journalctl -f                     # Follow mode (like tail -f)
+journalctl --since "2024-01-01"   # Logs since a date
+journalctl -p err                 # Only error-level and above
+```
+
+---
+
+## Links (Soft vs Hard)
+
+| Feature | Soft Link (Symbolic) | Hard Link |
+|---------|---------------------|-----------|
+| Points to | File name/path | File inode (actual data) |
+| Breaks if original deleted | Yes (dangling link) | No (data persists) |
+| Can link directories | Yes | No |
+| Cross filesystem links | Yes | No |
+| Shows as separate file type | `l` in `ls -l` | Appears identical |
+| File size shown | Size of path string | Size of actual file |
+
+```bash
+# Soft Link (Symbolic Link)
+ln -s /path/to/original link_name
+
+# Hard Link
+ln /path/to/original link_name
+```
+
+Examples:
+```bash
+ln -s /var/www/html /home/hitesh/www
+# Creates a shortcut named 'www' pointing to /var/www/html.
+# Opening /home/hitesh/www actually accesses /var/www/html.
+
+ln -s /usr/bin/python3 /usr/bin/python
+# Creates another name (alias) for the python3 executable.
+
+ln important.txt backup_link.txt
+# Creates a hard link.
+# Both filenames point to the same file (same inode).
+# Editing either file changes the same data.
+```
+
+Viewing links:
+```bash
+ls -l
+# Soft links are displayed with -> showing the target path.
+# Example:
+# mysyslog -> /var/log/syslog
+
+ls -li
+# Displays inode numbers.
+# Hard-linked files have exactly the same inode number,
+# proving they are the same file with different names.
+
+readlink -f link_name
+# Prints the final absolute path that a soft link points to.
+```
+
+Soft link example:
+```bash
+$ ln -s /var/log/syslog mysyslog
+# Creates a symbolic link named "mysyslog".
+
+$ ls -l mysyslog
+lrwxrwxrwx 1 hitesh hitesh 15 Jun 10 10:00 mysyslog -> /var/log/syslog
+```
+
+---
+
+## SELinux
+
+Security-Enhanced Linux (SELinux) is a mandatory access control (MAC) security framework built into the Linux kernel — primarily used in RHEL/CentOS systems.
+
+Traditional Linux uses Discretionary Access Control (DAC) — owner decides permissions. SELinux adds Mandatory Access Control (MAC) — system policy controls access regardless of owner.
+
+| Mode | Behavior |
+|------|----------|
+| `enforcing` | Actively blocks and logs policy violations |
+| `permissive` | Only logs violations (does NOT block) — used for debugging |
+| `disabled` | SELinux completely off |
+
+```bash
+getenforce              # Check current mode
+sestatus                # Full SELinux status
+setenforce 0            # Temporarily set to permissive (until reboot)
+setenforce 1            # Temporarily set to enforcing
+
+# Permanent change: edit /etc/selinux/config
+SELINUX=enforcing       # Options: enforcing, permissive, disabled
+
+# Check SELinux context of file
+ls -Z /var/www/html/index.html
+
+# Fix file context (common fix for web servers)
+restorecon -Rv /var/www/html/
+
+# View SELinux denials in audit log
+grep "denied" /var/log/audit/audit.log
+```
+
+---
+
+## Encoding & Misc Utilities
+
+### Base64
+
+An encoding algorithm, **not** encryption. Encoding converts data into text-safe format; decoding reverses it.
 
 ```bash
 # Syntax
@@ -1443,7 +1663,7 @@ base64 -d encoded.txt
 
 # Encode Text
 echo "Linux" | base64        # TGludXgK
-echo -n "Linux" | base64        # No extra K at the end comes from the newline added by echo - TGludXg=
+echo -n "Linux" | base64     # No trailing newline: TGludXg=
 
 # Decode Text
 echo "TGludXg=" | base64 -d
@@ -1457,34 +1677,15 @@ echo -n '{"name":"Alice"}' | base64
 echo "eyJuYW1lIjoiQWxpY2UifQ==" | base64 -d
 ```
 
-## What is tr command?
+---
 
-Linux provides the tr (translate) command to replace one set of characters with another.
+## Shell Scripting Basics
 
-```bash
-echo "abc" | tr 'abc' 'xyz'        # xyz
-cat data.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'        # Alphabet rotated by 13 positions
-tr 'A-Za-z' 'N-ZA-Mn-za-m' < data.txt
-```
+### What Is a Shell Script?
 
-# Part 3 - Shell Scripting Basics
+A shell script is a plain text file containing a series of Linux/Unix commands executed sequentially by the shell interpreter (`bash`, `sh`, `zsh`, etc.). Used for automating repetitive tasks (backups, deployments, cleanups), batch processing, system administration, and DevOps/CI-CD pipelines.
 
-## What is POSIX-compliant systems?
-
-POSIX-compliant systems: POSIX stands for Portable Operating System Interface. It is a set of standards defined by the IEEE that specifies how Unix-like operating systems should behave, including commands, APIs, shell behavior, and utilities. The goal of POSIX is portability - a script or program written for one POSIX-compliant system should run on another with little or no modification.
-
-## What is a shell script?
-
-A shell script is a plain text file containing a series of Linux/Unix commands that are executed sequentially by the shell interpreter (like `bash`, `sh`, `zsh`).
-
-### Why use shell scripts?
-
-- Automate repetitive tasks - backups, deployments, cleanups
-- Batch processing - process multiple files at once
-- System administration - user management, monitoring
-- DevOps pipelines - CI/CD automation, infrastructure tasks
-
-### Structure of a basic shell script
+### Basic Script Structure
 
 ```bash
 #!/bin/bash
@@ -1504,7 +1705,7 @@ echo "Today is: $DATE"
 echo "Script completed successfully."
 ```
 
-### How to run a script
+### Running a Script
 
 ```bash
 # Method 1: Make executable and run
@@ -1517,17 +1718,53 @@ bash hello.sh
 # Method 3: Source (run in current shell)
 source hello.sh
 . hello.sh    # Shorthand for source
+
+# Full workflow
+cat > myscript.sh << 'EOF'
+#!/bin/bash
+echo "Hello World"
+EOF
+
+chmod +x myscript.sh
+./myscript.sh           # Run from current directory
+bash myscript.sh        # Explicitly use bash
+sh myscript.sh          # Use sh interpreter
+/full/path/myscript.sh  # Use full path
+
+sudo ./myscript.sh       # Run as root
+sudo bash myscript.sh
+
+./myscript.sh &          # Run in background
+nohup ./myscript.sh &    # Keep running after logout
+
+./myscript.sh arg1 arg2  # Pass arguments
 ```
 
-## How to define and access variables?
+### The Shebang (`#!`)
 
-Variables store data that can be reused throughout the script.
+The first line of a script — tells the OS which interpreter to use.
 
-### Variable Rules
+```bash
+#!/bin/bash         # Use bash shell
+#!/bin/sh           # Use POSIX sh (more portable)
+#!/usr/bin/python3  # Run as Python 3 script
+#!/usr/bin/env node # Run as Node.js script (portable path)
+#!/usr/bin/perl     # Run as Perl script
+```
 
-- No spaces around `=` sign
-- Variable names are case-sensitive (`NAME` != `name`)
-- Convention: use UPPERCASE for constants, lowercase for regular vars
+```bash
+#!/usr/bin/env bash    # More portable - finds bash in PATH
+#!/bin/bash            # Hardcoded path - may fail if bash is elsewhere
+```
+> Best practice: use `#!/usr/bin/env bash` for portability across systems.
+
+```bash
+# Check what shell is being used
+echo $SHELL       # Your login shell
+echo $0           # Current shell or script name
+```
+
+### Variables
 
 ```bash
 #!/bin/bash
@@ -1564,8 +1801,10 @@ echo "Age: $age"    # Will print nothing
 
 # Default values
 echo ${undefined_var:-"default value"}   # Use default if unset
-echo ${name:="Anonymous"}               # Assign default if unset
+echo ${name:="Anonymous"}                # Assign default if unset
 ```
+
+> Variable rules: no spaces around `=`; names are case-sensitive (`NAME` != `name`); convention: UPPERCASE for constants, lowercase for regular vars.
 
 ### Special Variables
 
@@ -1596,21 +1835,22 @@ $2           # Second argument
 $#           # Number of arguments
 $@           # All arguments (preserves each argument)
 $*           # All arguments (as a single string)
+```
 
+```bash
 # $PATH is a colon-separated list of directories the shell searches for commands.
-
 echo $PATH    # /usr/local/bin:/usr/bin:/bin
 
 # Add a new directory to PATH (append):
 export PATH=$PATH:/home/hitesh/scripts
-
 # Now scripts in that folder can run without ./ or full path
-
 ```
-## export and environment variables
 
-By default, a variable is only available in the current shell. `export` makes it available to any child processes/subshells spawned from that shell.
+### export and Environment Variables
 
+By default, a variable is only available in the current shell. `export` makes it available to any child processes/subshells.
+
+```bash
 # Shell variable (local to this shell only)
 name="Hitesh"
 bash -c 'echo $name'    # prints nothing - child shell can't see it
@@ -1625,16 +1865,13 @@ printenv
 
 # Export inline for a single command
 MY_VAR=test command
+```
 
-## What are positional parameters?
-
-Positional parameters allow passing arguments to a script from the command line.
+### Positional Parameters
 
 ```bash
 ./script.sh arg1 arg2 arg3
 ```
-
-### Special Parameter Variables
 
 | Variable | Meaning |
 |----------|---------|
@@ -1647,8 +1884,6 @@ Positional parameters allow passing arguments to a script from the command line.
 | `$*` | All arguments as one string |
 | `$?` | Exit status of last command |
 | `$$` | PID of current script |
-
-### Example script using positional parameters
 
 ```bash
 #!/bin/bash
@@ -1681,9 +1916,9 @@ Usage: ./deploy.sh <environment> <version>
 Example: ./deploy.sh production 1.2.3
 ```
 
-## What is getopts?
+### getopts
 
-getopts parses flag-style options (-v, -f file) instead of relying only on positional order.
+Parses flag-style options (`-v`, `-f file`) instead of relying only on positional order.
 
 ```bash
 #!/bin/bash
@@ -1695,25 +1930,28 @@ while getopts "v:f:h" opt; do
         \?) echo "Invalid option: -$OPTARG"; exit 1 ;;
     esac
 done
+# Run: ./script.sh -v 1.2.3 -f config.txt
 ```
 
-### Run: ./script.sh -v 1.2.3 -f config.txt
+### Conditionals — `[ ]` vs `[[ ]]`
 
+```text
 [ ] -> POSIX test command, works in all shells (sh, dash, bash)
        no pattern matching, word-splitting can cause bugs with unquoted variables
 
 [[ ]] -> bash-only extended test, safer, supports =~ (regex) and && / || directly
+```
 
+```bash
 # [ ] needs quotes to be safe:
 if [ "$name" == "hitesh" ]; then echo "match"; fi
 
 # [[ ]] handles unquoted vars safely and supports regex:
 if [[ $name == "hitesh" ]]; then echo "match"; fi
 if [[ $email =~ ^[a-z]+@[a-z]+\.com$ ]]; then echo "valid email"; fi
+```
 
-## How do you write an if condition in bash?
-
-### Syntax
+### if / elif / else Syntax
 
 ```bash
 if [ condition ]; then
@@ -1725,50 +1963,25 @@ else
 fi
 ```
 
-### Numeric Comparison Operators
+**Numeric comparison operators:** `-eq` equal, `-ne` not equal, `-gt` greater than, `-lt` less than, `-ge` greater or equal, `-le` less or equal
 
-| Operator | Meaning |
-|----------|---------|
-| `-eq` | Equal to |
-| `-ne` | Not equal to |
-| `-gt` | Greater than |
-| `-lt` | Less than |
-| `-ge` | Greater than or equal |
-| `-le` | Less than or equal |
+**String comparison operators:** `==`/`=` equal, `!=` not equal, `-z` empty, `-n` not empty
 
-### String Comparison Operators
+**File test operators:** `-f` regular file exists, `-d` directory exists, `-e` exists, `-r` readable, `-w` writable, `-x` executable, `-s` exists and not empty
 
-| Operator | Meaning |
-|----------|---------|
-| `==` or `=` | String equal |
-| `!=` | String not equal |
-| `-z` | String is empty |
-| `-n` | String is not empty |
+### The test Command
 
-### File Test Operators
-
-| Operator | Meaning |
-|----------|---------|
-| `-f` | File exists and is a regular file |
-| `-d` | Directory exists |
-| `-e` | File/directory exists |
-| `-r` | File is readable |
-| `-w` | File is writable |
-| `-x` | File is executable |
-| `-s` | File exists and is not empty |
-
-## test command (written form)
-
-[ $a -eq $b ] is shorthand for the test command:
+```bash
+# [ $a -eq $b ] is shorthand for the test command:
 test $a -eq $b
 echo $?          # 0 = true, 1 = false
 
 # These are equivalent:
 if [ -f file.txt ]; then echo "exists"; fi
 if test -f file.txt; then echo "exists"; fi
+```
 
-
-### Examples
+### Conditional Examples
 
 ```bash
 #!/bin/bash
@@ -1814,14 +2027,12 @@ if [[ $name =~ ^[A-Z] ]]; then
 fi
 ```
 
-## How to use loops?
-
-### for loop - iterate over list or range
+### Loops
 
 ```bash
 #!/bin/bash
 
-# Loop over a list
+# for loop - Loop over a list
 for fruit in apple banana mango orange; do
     echo "Fruit: $fruit"
 done
@@ -1853,12 +2064,10 @@ for user in $(cat /etc/passwd | cut -d: -f1); do
 done
 ```
 
-### while loop - repeat while condition is true
-
 ```bash
 #!/bin/bash
 
-# Basic while loop
+# while loop - repeat while condition is true
 count=1
 while [ $count -le 5 ]; do
     echo "Count: $count"
@@ -1880,7 +2089,7 @@ while true; do
     sleep 5
 done
 
-# Until loop (opposite of while - runs until condition is TRUE)
+# until loop (opposite of while - runs until condition is TRUE)
 until [ -f /tmp/done.flag ]; do
     echo "Waiting for task to complete..."
     sleep 2
@@ -1908,7 +2117,7 @@ for i in {1..100}; do
 done
 ```
 
-## How to read user input?
+### Reading User Input
 
 ```bash
 #!/bin/bash
@@ -1950,8 +2159,9 @@ for item in "${items[@]}"; do
 done
 ```
 
-## printf vs echo
+### printf vs echo
 
+```bash
 echo "Hello"                    # simple output, adds newline
 printf "Hello\n"                # more control, no automatic newline
 printf "%s is %d\n" "age" 25    # formatted output like C's printf
@@ -1959,13 +2169,11 @@ printf "%-10s|%5d\n" "name" 42  # column alignment
 echo -n "No newline"        # suppress trailing newline
 echo -e "Line1\nLine2"      # enable interpretation of \n, \t escape sequences
 echo "Line1\nLine2"         # without -e, \n prints literally (not a real newline)
+```
 
-## What is $??
+### `$?` — Exit Status
 
-`$?` is the exit status of the last executed command. It's crucial for error handling.
-
-- `0` = success
-- Any non-zero value (1-255) = failure
+`$?` is the exit status of the last executed command — `0` = success, any non-zero value (1–255) = failure.
 
 ```bash
 #!/bin/bash
@@ -1977,15 +2185,11 @@ if [ $? -eq 0 ]; then
 else
     echo "No internet connection!"
 fi
+```
 
-# Common exit codes:
-# 0   = Success
-# 1   = General error
-# 2   = Misuse of shell command
-# 126 = Command found but not executable
-# 127 = Command not found
-# 130 = Script terminated with Ctrl+C
+Common exit codes: `0` Success · `1` General error · `2` Misuse of shell command · `126` Command found but not executable · `127` Command not found · `130` Script terminated with Ctrl+C
 
+```bash
 # Store exit status immediately (it changes after next command!)
 ls /nonexistent/path 2>/dev/null
 STATUS=$?
@@ -2008,8 +2212,8 @@ validate_input ""
 echo "Return value: $?"   # Prints: 1
 ```
 
-### exit with custom codes
-
+```bash
+# exit with custom codes
 #!/bin/bash
 if [ ! -f "$1" ]; then
     echo "Error: file not found"
@@ -2017,46 +2221,17 @@ if [ ! -f "$1" ]; then
 fi
 echo "File found"
 exit 0
-
-## What is the shebang (#!)?
-
-The shebang (also called hashbang) is the first line of a script. It tells the OS which interpreter to use to run the script.
-
-```bash
-#!/bin/bash         # Use bash shell
-#!/bin/sh           # Use POSIX sh (more portable)
-#!/usr/bin/python3  # Run as Python 3 script
-#!/usr/bin/env node # Run as Node.js script (portable path)
-#!/usr/bin/perl     # Run as Perl script
 ```
 
-### Why use #!/usr/bin/env bash vs #!/bin/bash?
+### Basic vi/vim Commands
 
 ```bash
-#!/usr/bin/env bash    # More portable - finds bash in PATH
-#!/bin/bash            # Hardcoded path - may fail if bash is elsewhere
-```
-
-Best practice: Use `#!/usr/bin/env bash` for portability across systems.
-
-```bash
-# Without shebang: runs with current shell (may not be bash)
-# With shebang: always runs with specified interpreter
-
-# Check what shell is being used
-echo $SHELL       # Your login shell
-echo $0           # Current shell or script name
-```
-
-## Basic vi/vim commands
-
 vi filename        # open file (or create if it doesn't exist)
+```
 
-# Modes:
-# Normal mode (default) - navigate, delete, copy
-# Insert mode - type text (press i to enter)
-# Command mode - save/quit (press : to enter)
+Modes: **Normal** (default — navigate, delete, copy) · **Insert** (type text, press `i`) · **Command** (save/quit, press `:`)
 
+```text
 i          # enter insert mode
 Esc        # back to normal mode
 :w         # save
@@ -2067,44 +2242,9 @@ dd         # delete current line
 yy         # copy (yank) current line
 p          # paste
 /text      # search for "text"
-
-## How to run a script?
-
-```bash
-# Step 1: Create the script
-cat > myscript.sh << 'EOF'
-#!/bin/bash
-echo "Hello World"
-EOF
-
-# Step 2: Add execute permission
-chmod +x myscript.sh
-
-# Step 3: Run the script
-./myscript.sh           # Run from current directory
-bash myscript.sh        # Explicitly use bash
-sh myscript.sh          # Use sh interpreter
-/full/path/myscript.sh  # Use full path
-
-# Run as root
-sudo ./myscript.sh
-sudo bash myscript.sh
-
-# Run in background
-./myscript.sh &
-nohup ./myscript.sh &    # Keep running after logout
-
-# Pass arguments
-./myscript.sh arg1 arg2
-
-# Source (run in current shell - variables persist)
-source myscript.sh
-. myscript.sh
 ```
 
-## How to debug a script?
-
-Debugging helps find errors in shell scripts.
+### Debugging a Script
 
 ```bash
 # Method 1: Run with -x flag (trace mode - prints each command before executing)
@@ -2146,11 +2286,11 @@ echo "[DEBUG] Variable value: $my_var"
 echo "[DEBUG] About to run: $command"
 ```
 
-# Part 4 - Advanced Shell Scripting
+---
 
-## How do you handle functions in bash?
+## Advanced Shell Scripting
 
-Functions allow you to organize code into reusable blocks.
+### Functions
 
 ```bash
 #!/bin/bash
@@ -2216,9 +2356,9 @@ factorial() {
 echo "5! = $(factorial 5)"
 ```
 
-## What is the use of case statement?
+### case Statement
 
-`case` is a clean alternative to multiple if-elif conditions - especially useful for menus and option parsing.
+Clean alternative to multiple if-elif conditions — especially useful for menus and option parsing.
 
 ```bash
 #!/bin/bash
@@ -2278,9 +2418,7 @@ case $ACTION in
 esac
 ```
 
-## What are arrays in bash?
-
-Arrays store multiple values in a single variable.
+### Arrays
 
 ```bash
 #!/bin/bash
@@ -2335,8 +2473,9 @@ for server in "${servers[@]}"; do
 done
 ```
 
-## String manipulation
+### String Manipulation
 
+```bash
 str="Hello World"
 
 echo ${#str}              # length: 11
@@ -2346,41 +2485,221 @@ echo ${str/World/Bash}    # replace first match: "Hello Bash"
 echo ${str//o/0}          # replace all matches: "Hell0 W0rld"
 echo ${str^^}              # uppercase: "HELLO WORLD"
 echo ${str,,}              # lowercase: "hello world"
+```
 
-## let and expr (arithmetic alternatives to $(()))
+### Arithmetic — let and expr
 
+```bash
 let x=5+3
 echo $x            # 8
 
 y=$(expr 5 + 3)
 echo $y            # 8
+```
 
-## How to redirect output?
+### trap — Signal Handling
+
+```bash
+#!/bin/bash
+
+# Catch Ctrl+C (SIGINT)
+trap "echo 'Ctrl+C pressed! Exiting...'; exit 1" SIGINT
+
+# Cleanup on exit
+cleanup() {
+    echo "Cleaning up temporary files..."
+    rm -f /tmp/script_temp_*
+    echo "Cleanup done."
+}
+trap cleanup EXIT    # Always run cleanup when script exits
+```
+
+Common signals: `SIGINT (2)` Ctrl+C · `SIGTERM (15)` kill command (graceful) · `SIGKILL (9)` kill -9 (cannot be caught!) · `SIGHUP (1)` Terminal closed / reload config · `EXIT` Script exits (any reason) · `ERR` Any command fails
+
+```bash
+# Real-world example: database backup with cleanup
+BACKUP_FILE="/tmp/backup_$(date +%F).sql"
+
+trap "rm -f $BACKUP_FILE; echo 'Backup interrupted and temp file removed'; exit 1" SIGINT SIGTERM
+
+echo "Starting backup..."
+mysqldump -u root mydb > $BACKUP_FILE
+echo "Backup complete: $BACKUP_FILE"
+
+# Temporarily ignore a signal
+trap "" SIGINT    # Ignore Ctrl+C
+echo "Critical section - cannot be interrupted"
+sleep 5
+trap SIGINT       # Restore default behavior
+```
+
+### exec
+
+Replaces the current shell process with a new command instead of spawning a child.
+
+```bash
+exec bash              # replaces current shell with a new bash instance
+exec > output.log      # redirect all subsequent script output to a file
+exec 2>&1              # redirect stderr to stdout for rest of script
+```
+
+### `==` vs `-eq`
+
+| Operator | Type | Used For |
+|----------|------|---------|
+| `==` or `=` | String operator | Comparing text/strings |
+| `-eq` | Arithmetic operator | Comparing integers |
+
+```bash
+#!/bin/bash
+
+# String comparison with ==
+name1="hitesh"
+name2="hitesh"
+if [ "$name1" == "$name2" ]; then
+    echo "Names are equal"
+fi
+
+# WRONG: Using == for numbers (compares as strings, not values!)
+if [ "10" == "9" ]; then
+    echo "This is string comparison - '10' is not '9' as strings"
+fi
+
+# Correct: Using -eq for numbers
+num1=10
+num2=10
+if [ $num1 -eq $num2 ]; then
+    echo "Numbers are equal"
+fi
+
+# The difference matters:
+# String "10" > "9" is FALSE (because "1" < "9" alphabetically)
+# Integer 10 > 9 is TRUE
+if [ "10" \> "9" ]; then
+    echo "Wrong! String comparison: '10' is NOT > '9'"
+fi
+if [ 10 -gt 9 ]; then
+    echo "Correct! Integer comparison: 10 > 9"
+fi
+
+# Summary of comparison operators:
+# Strings: == != < > -z (empty) -n (not empty)
+# Integers: -eq -ne -gt -lt -ge -le
+```
+
+### Checking File/Directory Existence
+
+```bash
+#!/bin/bash
+
+# File checks
+if [ -f "/etc/hosts" ]; then
+    echo "File exists"
+fi
+
+if [ ! -f "/tmp/missing.txt" ]; then
+    echo "File does NOT exist"
+fi
+
+# Directory checks
+if [ -d "/var/log" ]; then
+    echo "Directory exists"
+fi
+
+# Readable, writable, executable
+if [ -r "/etc/hosts" ]; then echo "File is readable"; fi
+if [ -w "/tmp/test.txt" ]; then echo "File is writable"; fi
+if [ -x "/usr/bin/bash" ]; then echo "File is executable"; fi
+
+# File not empty
+if [ -s "/var/log/syslog" ]; then
+    echo "Log file is not empty"
+fi
+
+# Comprehensive example
+check_file() {
+    local file="$1"
+    
+    if [ ! -e "$file" ]; then
+        echo "Error: $file does not exist"
+        return 1
+    fi
+    
+    [ -f "$file" ] && echo "Type: Regular file"
+    [ -d "$file" ] && echo "Type: Directory"
+    [ -L "$file" ] && echo "Type: Symbolic link"
+    [ -r "$file" ] && echo "Readable: Yes" || echo "Readable: No"
+    [ -w "$file" ] && echo "Writable: Yes" || echo "Writable: No"
+    [ -x "$file" ] && echo "Executable: Yes" || echo "Executable: No"
+}
+
+check_file "/etc/hosts"
+```
+
+### set -e — Exit on Error
+
+`set -e` makes the script exit immediately when any command returns a non-zero exit status (fails).
+
+```bash
+#!/bin/bash
+set -e    # Exit on error
+
+echo "Step 1: Starting"
+cp /etc/hosts /tmp/hosts_backup    # If this fails, script stops
+echo "Step 2: File copied"
+ls /nonexistent/dir                # This fails - script exits here
+echo "Step 3: Never reached"      # This will NOT execute
+```
+
+Recommended script safety settings:
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# -e  = Exit on error
+# -u  = Treat unset variables as errors
+# -o pipefail = Exit if any part of a pipe fails
+```
+
+Bypassing `set -e` when needed:
+```bash
+set -e
+
+# Use || true to allow a command to fail without exiting
+rm /tmp/file.txt || true         # Won't stop script if file missing
+
+# Use if-statement (doesn't trigger set -e)
+if ! some_command; then
+    echo "Command failed, handling it..."
+fi
+
+# Temporarily disable
+set +e    # Turn off exit-on-error
+risky_command
+set -e    # Turn it back on
+```
+
+---
+
+## I/O Redirection & Pipelines
 
 Linux programs use three standard streams:
-
-- stdin (0) - Standard Input (where a program reads input from, usually the keyboard)
-- stdout (1) - Standard Output (normal output shown on the terminal)
-- stderr (2) - Standard Error (error messages shown on the terminal)
+- **stdin (0)** — Standard Input (where a program reads input from, usually the keyboard)
+- **stdout (1)** — Standard Output (normal output shown on the terminal)
+- **stderr (2)** — Standard Error (error messages shown on the terminal)
 
 | Symbol | Purpose |
 |--------|---------|
-| `>` | Redirect stdout (normal output) to a file. If the file already exists, its contents are overwritten. |
-| `>>` | Redirect stdout to a file. If the file exists, new output is appended to the end instead of replacing it. |
-| `2>` | Redirect stderr (error messages only) to a file. Normal output still appears on the terminal. |
-| `2>>` | Append stderr to a file without overwriting its existing contents. |
-| `&>` | Redirect both stdout and stderr to the same file (Bash shortcut). Nothing is displayed on the terminal. |
-| `2>&1` | Redirect stderr to wherever stdout is currently going. Commonly used to combine normal output and errors into one destination. |
-| `< file` | Use the specified file as the program's input (stdin) instead of typing from the keyboard. |
-| `/dev/null` | A special "black hole" device. Anything redirected here is discarded permanently. Useful when you want to ignore output or errors. |
+| `>` | Redirect stdout to a file (overwrites existing contents) |
+| `>>` | Redirect stdout to a file, appending instead of replacing |
+| `2>` | Redirect stderr only to a file; normal output still shows on terminal |
+| `2>>` | Append stderr to a file without overwriting existing contents |
+| `&>` | Redirect both stdout and stderr to the same file (Bash shortcut) |
+| `2>&1` | Redirect stderr to wherever stdout is currently going |
+| `< file` | Use the specified file as the program's stdin instead of the keyboard |
+| `/dev/null` | A "black hole" device — anything redirected here is discarded permanently |
 
-Easy to remember:
-- `>` -> Replace the file with new output.
-- `>>` -> Append new output to the end of the file.
-- `2>` -> Save only errors.
-- `2>&1` -> Combine normal output + errors.
-- `<` -> Read input from a file.
-- `/dev/null` -> Throw the output away.
+> Easy to remember: `>` replace · `>>` append · `2>` errors only · `2>&1` combine normal output + errors · `<` read input from a file · `/dev/null` throw the output away.
 
 ```bash
 # Basic redirects
@@ -2409,9 +2728,9 @@ sort < unsorted.txt > sorted.txt        # Sort file
 grep "pattern" <<< "This is the string to search"
 ```
 
-## What is a pipeline?
+### Pipelines
 
-A pipeline (`|`) connects the stdout of one command to the stdin of another. This chains commands together to process data progressively.
+A pipeline (`|`) connects the stdout of one command to the stdin of another, chaining commands to process data progressively.
 
 ```bash
 # Basic pipeline
@@ -2424,21 +2743,16 @@ cat /var/log/auth.log | grep "Failed" | awk '{print $11}' | sort | uniq -c | sor
 # Find top 10 IPs with failed SSH attempts
 
 # Real-world pipeline examples
-# Count lines in a file
-cat file.txt | wc -l
-wc -l < file.txt    # More efficient (no cat needed)
+cat file.txt | wc -l                          # Count lines in a file
+wc -l < file.txt                              # More efficient (no cat needed)
 
-# Find and count processes
-ps aux | grep nginx | grep -v grep | wc -l
+ps aux | grep nginx | grep -v grep | wc -l    # Find and count processes
 
-# Monitor CPU-heavy processes
-ps aux --sort=-%cpu | head -5
+ps aux --sort=-%cpu | head -5                 # Monitor CPU-heavy processes
 
-# Find unique IPs in web log
-cat access.log | awk '{print $1}' | sort | uniq
+cat access.log | awk '{print $1}' | sort | uniq   # Find unique IPs in a web log
 
-# Pipeline with sed and awk
-echo "Hello World 2024" | sed 's/World/Linux/' | awk '{print $1, $3}'
+echo "Hello World 2024" | sed 's/World/Linux/' | awk '{print $1, $3}'   # sed + awk
 
 # Named pipe (FIFO)
 mkfifo mypipe
@@ -2446,9 +2760,9 @@ command1 > mypipe &
 command2 < mypipe
 ```
 
-## What is a here-document?
+### Here-Documents (heredoc)
 
-A here-document (heredoc) allows providing multi-line input to a command inline in the script.
+Allows providing multi-line input to a command inline in the script.
 
 ```bash
 #!/bin/bash
@@ -2503,213 +2817,18 @@ QUIT
 SQL
 ```
 
-## What is the trap command?
+---
 
-`trap` catches signals (interrupts) and executes a function/command when they occur.
+## Linux Directory Structure
 
-```bash
-#!/bin/bash
+The Linux filesystem follows the Filesystem Hierarchy Standard (FHS), which standardizes directory structure across all distributions.
 
-# Catch Ctrl+C (SIGINT)
-trap "echo 'Ctrl+C pressed! Exiting...'; exit 1" SIGINT
-
-# Cleanup on exit
-cleanup() {
-    echo "Cleaning up temporary files..."
-    rm -f /tmp/script_temp_*
-    echo "Cleanup done."
-}
-trap cleanup EXIT    # Always run cleanup when script exits
-
-# Common signals
-# SIGINT  (2)  = Ctrl+C
-# SIGTERM (15) = kill command (graceful termination)
-# SIGKILL (9)  = kill -9 (cannot be caught!)
-# SIGHUP  (1)  = Terminal closed / reload config
-# EXIT         = Script exits (any reason)
-# ERR          = Any command fails
-
-# Real-world example: database backup with cleanup
-BACKUP_FILE="/tmp/backup_$(date +%F).sql"
-
-trap "rm -f $BACKUP_FILE; echo 'Backup interrupted and temp file removed'; exit 1" SIGINT SIGTERM
-
-echo "Starting backup..."
-mysqldump -u root mydb > $BACKUP_FILE
-echo "Backup complete: $BACKUP_FILE"
-
-# Temporarily ignore a signal
-trap "" SIGINT    # Ignore Ctrl+C
-echo "Critical section - cannot be interrupted"
-sleep 5
-trap SIGINT       # Restore default behavior
-```
-
-## What is exec?
-
-exec replaces the current shell process with a new command instead of spawning a child.
-
-exec bash              # replaces current shell with a new bash instance
-exec > output.log      # redirect all subsequent script output to a file
-exec 2>&1              # redirect stderr to stdout for rest of script
-
-## What is the difference between == and -eq?
-
-| Operator | Type | Used For |
-|----------|------|---------|
-| `==` or `=` | String operator | Comparing text/strings |
-| `-eq` | Arithmetic operator | Comparing integers |
-
-```bash
-#!/bin/bash
-
-# String comparison with ==
-name1="hitesh"
-name2="hitesh"
-if [ "$name1" == "$name2" ]; then
-    echo "Names are equal"
-fi
-
-# WRONG: Using == for numbers (compares as strings, not values!)
-if [ "10" == "9" ]; then
-    echo "This is string comparison - '10' is not '9' as strings"
-fi
-
-# Correct: Using -eq for numbers
-num1=10
-num2=10
-if [ $num1 -eq $num2 ]; then
-    echo "Numbers are equal"
-fi
-
-# The difference matters:
-# String "10" > "9" is FALSE (because "1" < "9" alphabetically)
-# Integer 10 > 9 is TRUE
-if [ "10" \> "9" ]; then
-    echo "Wrong! String comparison: '10' is NOT > '9'"
-fi
-if [ 10 -gt 9 ]; then
-    echo "Correct! Integer comparison: 10 > 9"
-fi
-
-# Summary of comparison operators:
-# Strings: == != < > -z (empty) -n (not empty)
-# Integers: -eq -ne -gt -lt -ge -le
-```
-
-## How to check if a file or directory exists?
-
-```bash
-#!/bin/bash
-
-# File checks
-if [ -f "/etc/hosts" ]; then
-    echo "File exists"
-fi
-
-if [ ! -f "/tmp/missing.txt" ]; then
-    echo "File does NOT exist"
-fi
-
-# Directory checks
-if [ -d "/var/log" ]; then
-    echo "Directory exists"
-fi
-
-# Readable, writable, executable
-if [ -r "/etc/hosts" ]; then echo "File is readable"; fi
-if [ -w "/tmp/test.txt" ]; then echo "File is writable"; fi
-if [ -x "/usr/bin/bash" ]; then echo "File is executable"; fi
-
-# File not empty
-if [ -s "/var/log/syslog" ]; then
-    echo "Log file is not empty"
-fi
-
-# Comprehensive example
-check_file() {
-    local file="$1"
-    
-    if [ ! -e "$file" ]; then
-        echo "Error: $file does not exist"
-        return 1
-    fi
-    
-    [ -f "$file" ] && echo "Type: Regular file"
-    [ -d "$file" ] && echo "Type: Directory"
-    [ -L "$file" ] && echo "Type: Symbolic link"
-    [ -r "$file" ] && echo "Readable: Yes" || echo "Readable: No"
-    [ -w "$file" ] && echo "Writable: Yes" || echo "Writable: No"
-    [ -x "$file" ] && echo "Executable: Yes" || echo "Executable: No"
-}
-
-check_file "/etc/hosts"
-```
-
-## What is set -e in bash?
-
-`set -e` makes the script exit immediately when any command returns a non-zero exit status (i.e., fails).
-
-```bash
-#!/bin/bash
-set -e    # Exit on error
-
-echo "Step 1: Starting"
-cp /etc/hosts /tmp/hosts_backup    # If this fails, script stops
-echo "Step 2: File copied"
-ls /nonexistent/dir                # This fails - script exits here
-echo "Step 3: Never reached"      # This will NOT execute
-```
-
-### Recommended Script Safety Settings
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-# -e  = Exit on error
-# -u  = Treat unset variables as errors
-# -o pipefail = Exit if any part of a pipe fails
-```
-
-### Bypassing set -e when needed
-
-```bash
-set -e
-
-# Use || true to allow a command to fail without exiting
-rm /tmp/file.txt || true         # Won't stop script if file missing
-
-# Use if-statement (doesn't trigger set -e)
-if ! some_command; then
-    echo "Command failed, handling it..."
-fi
-
-# Temporarily disable
-set +e    # Turn off exit-on-error
-risky_command
-set -e    # Turn it back on
-```
-
-# Part 5 - Linux Directory Structure
-
-The Linux filesystem follows the Filesystem Hierarchy Standard (FHS) which standardizes directory structure across all distributions.
-
-```
+```text
 /        # Root directory; the top-level directory. Everything in Linux starts from here.
 /bin     # Essential user commands (ls, cp, mv, rm, cat, etc.). Required for booting and basic system operation.
 /boot    # Bootloader files, Linux kernel (vmlinuz), initramfs, and GRUB configuration used during system startup.
 /dev     # Device files representing hardware (disks, USB, terminals, etc.). In Linux, devices are treated as files.
 /etc     # System-wide configuration files (network, users, services, SSH, DNS, etc.). No user data is stored here.
-/etc/hostname  -> stores just this machine's hostname (one line, e.g. "webserver01")
-/etc/hosts     -> maps hostnames/IPs for local name resolution (e.g. 127.0.0.1 localhost)
-
-cat /etc/hostname
-# webserver01
-
-cat /etc/hosts
-# 127.0.0.1   localhost
-# 192.168.1.5 webserver01
 /home    # Home directories for normal users (e.g., /home/alice, /home/john). Stores personal files and settings.
 /lib     # Essential shared libraries required by programs in /bin and /sbin. Similar to DLLs in Windows.
 /media   # Automatically mounted removable media like USB drives, DVDs, and external hard disks.
@@ -2724,6 +2843,17 @@ cat /etc/hosts
 /tmp     # Temporary files created by users and applications. Often cleaned automatically after reboot or periodically.
 /usr     # User applications, utilities, libraries, documentation, and shared resources. Most installed software resides here.
 /var     # Variable data that changes frequently, including logs, cache, mail, spool files, databases, and temporary application data.
+```
+
+`/etc/hostname` stores just this machine's hostname (one line). `/etc/hosts` maps hostnames/IPs for local name resolution:
+
+```bash
+cat /etc/hostname
+# webserver01
+
+cat /etc/hosts
+# 127.0.0.1   localhost
+# 192.168.1.5 webserver01
 ```
 
 ### Quick Reference Table
@@ -2746,11 +2876,13 @@ cat /etc/hosts
 | `/mnt` | Manual mounts | `mount /dev/sdb1 /mnt` |
 | `/media` | Auto-mounted media | `/media/usb`, `/media/cdrom` |
 
-# Part 6 - Linux Boot Process
+---
 
-## Complete Boot Flow
+## Linux Boot Process
 
-```
+### Complete Boot Flow
+
+```text
 Power ON
 BIOS / UEFI -> POST (Power-On Self Test) -> Detects hardware
 Bootloader (GRUB) -> Loads kernel + initramfs into memory
@@ -2759,7 +2891,7 @@ systemd (PID 1) -> Starts services and targets
 Login Prompt (CLI or GUI)
 ```
 
-## Stage 1 - BIOS / UEFI
+### Stage 1 — BIOS / UEFI
 
 - Performs POST (Power-On Self Test)
 - Detects and initializes hardware (CPU, RAM, disk, keyboard)
@@ -2774,7 +2906,7 @@ Login Prompt (CLI or GUI)
 | Slower boot | Faster boot |
 | Basic text interface | Graphical interface possible |
 
-## Stage 2 - GRUB Bootloader
+### Stage 2 — GRUB Bootloader
 
 - Located at `/boot/grub/`
 - Presents boot menu (OS selection, kernel version selection)
@@ -2794,7 +2926,7 @@ grub-install /dev/sda
 update-grub
 ```
 
-## Stage 3 - Linux Kernel
+### Stage 3 — Linux Kernel
 
 - Decompresses itself into memory
 - Initializes CPU, memory management, device drivers
@@ -2804,29 +2936,29 @@ update-grub
 - Starts the first user-space process: systemd (PID 1)
 
 ```bash
-uname -r             # Show kernel version
-dmesg                # View kernel boot messages
+uname -r               # Show kernel version
+dmesg                  # View kernel boot messages
 dmesg | grep -i error  # Check for hardware errors during boot
-ls /boot/            # View available kernels
+ls /boot/               # View available kernels
 ```
 
-## Stage 4 - systemd
+### Stage 4 — systemd
 
 - First userspace process (PID = 1)
 - Manages all services, mounts, and targets
 - Parallel service startup (faster than old init)
 
 ```bash
-ps -p 1             # Verify PID 1 is systemd
-systemd-analyze     # Show total boot time
-systemd-analyze blame   # Time taken by each service
-systemd-analyze critical-chain  # Critical path in boot
+ps -p 1                          # Verify PID 1 is systemd
+systemd-analyze                  # Show total boot time
+systemd-analyze blame            # Time taken by each service
+systemd-analyze critical-chain   # Critical path in boot
 
 systemctl list-units --type=service    # All services
 systemctl get-default                  # Current boot target
 ```
 
-## Stage 5 - Targets (Replaced Runlevels)
+### Stage 5 — Targets (Replaced Runlevels)
 
 | Old Runlevel | systemd Target | Purpose |
 |-------------|----------------|---------|
@@ -2843,33 +2975,7 @@ systemctl set-default graphical.target        # Set GUI mode
 systemctl isolate rescue.target               # Switch to rescue mode now
 ```
 
-# Part 7 - System Administration
-
-## User Management
-
-```bash
-# Add user
-useradd hitesh                         # Create user
-useradd -m -s /bin/bash hitesh         # With home dir and bash shell
-passwd hitesh                          # Set password
-
-# Modify user
-usermod -aG sudo hitesh                # Add to sudo group
-usermod -s /bin/zsh hitesh             # Change shell
-usermod -d /new/home hitesh            # Change home directory
-usermod -l newhitesh hitesh            # Rename user
-
-# Delete user
-userdel hitesh                         # Delete user (keep home)
-userdel -r hitesh                      # Delete user + home directory
-
-# View user info
-id hitesh                              # UID, GID, groups
-cat /etc/passwd | grep hitesh          # User entry
-groups hitesh                          # Group memberships
-```
-
-## Service Management with systemctl
+### Service Management with systemctl
 
 ```bash
 systemctl status nginx          # Check service status
@@ -2883,85 +2989,11 @@ systemctl is-active nginx       # Check if running (returns 0 or non-zero)
 systemctl list-units --failed   # List failed services
 ```
 
-# Part 8 - DevOps-Focused Linux
+---
 
-## Process Management
+## Practical Shell Script Examples
 
-```bash
-# List processes
-ps -ef | grep nginx            # Find process
-ps aux --sort=-%cpu | head     # Top CPU consumers
-
-# Kill processes
-kill PID                       # Send SIGTERM (graceful)
-kill -9 PID                    # Send SIGKILL (force)
-kill -15 PID                   # Send SIGTERM explicitly
-killall nginx                  # Kill all processes named nginx
-pkill -u hitesh                # Kill all processes by user
-
-# Background/foreground
-command &                      # Run in background
-jobs                           # List background jobs
-fg %1                          # Bring job 1 to foreground
-bg %1                          # Send to background
-nohup command &                # Persist after logout
-
-# Suspend and resume
-Ctrl+Z             # suspend current foreground job
-bg                 # resume suspended job in background
-fg                 # bring background job to foreground
-disown %1           # remove job from shell's job table (keeps running after logout)
-
-# kill vs pkill vs killall
-kill PID            # kill by process ID
-pkill nginx          # kill by process name (pattern match)
-killall nginx        # kill all processes with exact name match
-```
-
-## Network Commands
-
-```bash
-ss -tulnp                      # Show all listening ports
-ss -tp                         # TCP connections
-curl -I https://example.com    # Get HTTP headers
-curl -o file.txt https://url   # Download file
-wget https://url/file.zip      # Download file
-scp file.txt user@server:/path # Copy file over SSH
-rsync -avz /src user@host:/dst # Sync files over SSH
-scp file.txt user@server:/path     # -r for directories, -P for custom port
-scp -r folder/ user@server:/path
-scp -P 2222 file.txt user@server:/path
-
-rsync -avz /src user@host:/dst
-# -a archive mode (preserves permissions/timestamps/symlinks)
-# -v verbose
-# -z compress during transfer
-```
-
-## Firewall (ufw / iptables)
-
-```bash
-# UFW (Ubuntu)
-ufw status
-ufw allow 80/tcp
-ufw allow ssh
-ufw deny 3306
-ufw enable
-
-# iptables
-iptables -L -n                 # List rules
-iptables -A INPUT -p tcp --dport 80 -j ACCEPT   # Allow port 80
-iptables -A INPUT -j DROP      # Drop all other input
-ifconfig  -> legacy command (net-tools package), still works on many systems but deprecated
-ip addr   -> modern replacement (iproute2 package), preferred on current distros
-
-ifconfig eth0            # old way to view interface info
-ip addr show eth0        # modern equivalent
-```
-
-# Part 9 - Practical Shell Script Examples
-
-## 1. Directory Backup Script
+### 1. Directory Backup Script
 
 ```bash
 #!/bin/bash
@@ -2980,7 +3012,7 @@ echo "[$(date)] Backup saved: $BACKUP_FILE"
 echo "[$(date)] Size: $(du -sh $BACKUP_FILE | cut -f1)"
 ```
 
-## 2. Disk Usage Alert Script
+### 2. Disk Usage Alert Script
 
 ```bash
 #!/bin/bash
@@ -2999,7 +3031,7 @@ else
 fi
 ```
 
-## 3. Service Health Check
+### 3. Service Health Check
 
 ```bash
 #!/bin/bash
@@ -3015,7 +3047,7 @@ for service in "${SERVICES[@]}"; do
 done
 ```
 
-## 4. Bulk User Creation from File
+### 4. Bulk User Creation from File
 
 ```bash
 #!/bin/bash
@@ -3039,7 +3071,7 @@ while IFS=',' read -r username password group; do
 done < "$USER_FILE"
 ```
 
-## 5. Even or Odd Number Check
+### 5. Even or Odd Number Check
 
 ```bash
 #!/bin/bash
@@ -3057,622 +3089,37 @@ else
 fi
 ```
 
-# Quick Reference Cheatsheet
+---
 
-# Linux File Operations Commands (Detailed Guide)
+## Quick Reference Cheatsheet
 
-File operations are among the most frequently used Linux commands. They help you create, view, copy, move, modify, search, and delete files and directories.
+### File Operations
 
-## 1. ls (List Files and Directories)
-
-Syntax:
-```bash
-ls [OPTIONS] [FILE/DIRECTORY]
-```
-
-Purpose: Displays files and directories.
-
-### List files
-
-```bash
-ls
-```
-Output:
-```
-file1.txt
-file2.txt
-Documents
-Downloads
-```
-
-### Long Listing
-
-```bash
-ls -l
-```
-Output:
-```
--rw-r--r-- 1 user user 2500 Jul 10 file1.txt
-drwxr-xr-x 2 user user 4096 Jul 11 Documents
-```
-Explanation: File permissions, number of links, owner, group, file size, modified date, file name.
-
-### Show Hidden Files
-
-```bash
-ls -a
-```
-Shows files beginning with ".". Example:
-```
-.bashrc
-.profile
-.gitignore
-```
-
-### Human Readable Size
-
-```bash
-ls -lh
-```
-Output:
-```
--rw-r--r-- 1 user user 2.3K file.txt
-```
-
-### Combined Options
-
-```bash
-ls -lah
-```
-Options:
-| Option | Meaning |
-|---------|----------|
-| -l | Long listing |
-| -a | Show hidden files |
-| -h | Human readable size |
-
-Example:
-```bash
-ls -lah
-```
-Output:
-```
-drwxr-xr-x
--rw-r--r--
-.bashrc
-.git
-README.md
-```
-
-### Interview Questions
-
-Q1. Difference between ls and ls -l?
-Answer: `ls` only shows names. `ls -l` shows detailed information.
-
-Q2. What does ls -a show?
-Hidden files starting with ".".
-
-## 2. cp (Copy Files and Directories)
-
-Syntax:
-```bash
-cp [OPTIONS] SOURCE DESTINATION
-```
-
-### Copy File
-
-```bash
-cp file.txt backup.txt
-```
-Creates:
-```
-file.txt
-backup.txt
-```
-
-### Copy Directory
-
-```bash
-cp -r project backup/
-```
-Option: `-r` = Recursive. Without -r: `cp: omitting directory 'project'`
-
-### Preserve Permissions
-
-```bash
-cp -p file.txt backup.txt
-```
-Preserves ownership, timestamps, permissions.
-
-### Verbose Copy
-
-```bash
-cp -v file.txt backup.txt
-```
-Output:
-```
-'file.txt' -> 'backup.txt'
-```
-
-Why is -r required? Directories contain subdirectories and files. Recursive mode copies everything.
-
-## 3. mv (Move or Rename)
-
-Syntax:
-```bash
-mv SOURCE DESTINATION
-```
-
-Rename File:
-```bash
-mv old.txt new.txt
-```
-
-Move File:
-```bash
-mv report.pdf /home/user/Documents/
-```
-
-Move Multiple Files:
-```bash
-mv *.txt backup/
-```
-
-Rename Directory:
-```bash
-mv project old_project
-```
-
-## 4. rm (Remove Files)
-
-Syntax:
-```bash
-rm [OPTIONS] FILE
-```
-
-Delete File:
-```bash
-rm notes.txt
-```
-
-Delete Directory:
-```bash
-rm -r folder/
-```
-
-Force Delete:
-```bash
-rm -f file.txt
-```
-No confirmation.
-
-Dangerous Command:
-```bash
-rm -rf directory/
-```
-Meaning:
-| Option | Description |
-|----------|-------------|
-| -r | Recursive |
-| -f | Force delete |
-
-Deletes everything permanently. No recycle bin.
-
-Safe Alternative:
-```bash
-rm -ri folder
-```
-Asks before deletion.
-
-Why is rm -rf dangerous? Because it permanently deletes files without confirmation.
-
-## 5. mkdir (Create Directories)
-
-Syntax:
-```bash
-mkdir directory_name
-```
-
-Create temporary directory:
-```bash
-mktemp -d
-cd /tmp/tmp.r4mK9sL1Qa
-```
-
-Create Single Directory:
-```bash
-mkdir logs
-```
-
-Create Multiple Directories:
-```bash
-mkdir dir1 dir2 dir3
-```
-
-Nested Directories:
-```bash
-mkdir -p project/src/java
-```
-Creates:
-```
-project/
-    src/
-        java/
-```
-Without -p: `No such file or directory`
-
-Interview Question: What does -p do? Creates parent directories automatically.
-
-## 6. touch
-
-Syntax:
-```bash
-touch filename
-```
-
-Create Empty File:
-```bash
-touch notes.txt
-```
-
-Create Multiple Files:
-```bash
-touch a.txt b.txt c.txt
-```
-
-Update Timestamp:
-```bash
-touch existing.txt
-```
-Updates modification time.
-
-Interview Question: Does touch overwrite files? No. It only updates timestamps if the file exists.
-
-## 7. cat (Concatenate)
-
-Syntax:
-```bash
-cat file
-```
-
-Display File:
-```bash
-cat notes.txt
-```
-
-Create File:
-```bash
-cat > file.txt
-```
-Type content. Press Ctrl+D.
-
-Merge Files:
-```bash
-cat file1 file2 > combined.txt
-```
-
-Number Lines:
-```bash
-cat -n file.txt
-```
-
-Interview Question: Difference between cat and less? cat prints everything. less shows one page at a time.
-
-## 8. less
-
-Syntax:
-```bash
-less filename
-```
-
-Open Large File:
-```bash
-less server.log
-```
-Navigation: Up Arrow, Down Arrow, Space/Page Down, Page Up, `/` search, `q` = Quit.
-
-Why use less? Large log files. Doesn't load the whole file into memory.
-
-## 9. wc (Word Count)
-
-Syntax:
-```bash
-wc [OPTIONS] file
-```
-
-Count Lines:
-```bash
-wc -l file.txt
-```
-
-Count Words:
-```bash
-wc -w file.txt
-```
-
-Count Characters:
-```bash
-wc -m file.txt
-```
-
-Count Bytes:
-```bash
-wc -c file.txt
-```
-
-Interview Question: What does wc -l return? Total number of lines.
-
-## 10. sort
-
-Syntax:
-```bash
-sort file.txt
-```
-
-Alphabetical Sort:
-```bash
-sort names.txt
-```
-
-Reverse:
-```bash
-sort -r names.txt
-```
-
-Numeric:
-```bash
-sort -n numbers.txt
-```
-
-Remove Duplicates:
-```bash
-sort -u file.txt
-```
-
-Interview Question: Difference between sort and sort -n? sort is alphabetical, sort -n is numeric.
-
-## 11. uniq
-
-Syntax:
-```bash
-uniq file.txt
-```
-Removes adjacent duplicate lines.
-
-Example input:
-```
-apple
-apple
-banana
-banana
-orange
-```
-Output:
-```
-apple
-banana
-orange
-```
-
-Count Duplicates:
-```bash
-uniq -c file.txt
-```
-Output:
-```
-2 apple
-2 banana
-1 orange
-```
-
-Remove Non-Unique:
-```bash
-uniq -u file.txt
-```
-
-Important: usually used with sort.
-```bash
-sort file.txt | uniq
-```
-
-## 12. cut
-
-Syntax:
-```bash
-cut [OPTIONS] file
-```
-
-Extract First Field:
-```bash
-cut -d: -f1 /etc/passwd
-```
-Options:
-| Option | Meaning |
-|----------|----------|
-| -d | Delimiter |
-| -f | Field |
-
-Example:
-```
-root:x:0:0
-```
-Output:
-```
-root
-```
-
-CSV Example:
-```
-John,25,Engineer
-```
-```bash
-cut -d, -f2 employee.csv
-```
-Output:
-```
-25
-```
-
-## 13. awk
-
-Powerful text-processing language.
-
-Print First Column:
-```bash
-awk '{print $1}' file.txt
-```
-Example:
-```
-John 25
-Alice 30
-```
-Output:
-```
-John
-Alice
-```
-
-Print Multiple Columns:
-```bash
-awk '{print $1,$2}'
-```
-
-Print Last Column:
-```bash
-awk '{print $NF}'
-```
-NF = Number of Fields
-
-Sum Numbers:
-```bash
-awk '{sum+=$2} END {print sum}'
-```
-
-Filter:
-```bash
-awk '$3>100'
-```
-
-Interview Question: Why is awk powerful? It can filter, calculate, format, search, parse, and generate reports.
-
-## 14. sed (Stream Editor)
-
-Used for searching and replacing text.
-
-Replace Text:
-```bash
-sed 's/old/new/' file.txt
-```
-Only first occurrence per line.
-
-Replace All:
-```bash
-sed 's/old/new/g' file.txt
-```
-g = Global
-
-Edit File Directly:
-```bash
-sed -i 's/old/new/g' file.txt
-```
-
-Delete Line:
-```bash
-sed '3d' file.txt
-```
-Deletes line 3.
-
-Print Specific Line:
-```bash
-sed -n '5p' file.txt
-```
-Prints line 5.
-
-Replace Using Regex:
-```bash
-sed 's/[0-9]/X/g'
-```
-
-Interview Question: Difference between sed and awk?
-| sed | awk |
-|------|------|
-| Stream editor | Programming language |
-| Best for replacing text | Best for parsing structured data |
-| Line-oriented editing | Field-oriented processing |
-| Supports regex | Supports variables, conditions, loops, arithmetic |
-
-## Common Command Combinations
-
-Find duplicate usernames:
-```bash
-cut -d: -f1 /etc/passwd | sort | uniq
-```
-
-Count unique entries:
-```bash
-sort file.txt | uniq | wc -l
-```
-
-Replace text and save:
-```bash
-sed 's/Linux/Ubuntu/g' input.txt > output.txt
-```
-
-Print first column then sort:
 ```bash
-awk '{print $1}' employees.txt | sort
+ls -lah             # List all, long format, human-readable
+cp -r src dst        # Copy recursively
+mv old new           # Move/rename
+rm -rf dir           # Force delete recursively
+mkdir -p a/b/c        # Create nested dirs
+touch file.txt        # Create empty file / update timestamp
 ```
 
-Count occurrences:
-```bash
-sort file.txt | uniq -c
-```
-
-## Real-World Examples
-
-Backup a project:
-```bash
-cp -r myproject/ backup/
-```
-
-Rename a log file:
-```bash
-mv app.log app.log.old
-```
-
-Delete temporary files:
-```bash
-rm -rf /tmp/project/*
-```
-
-View a large log file:
-```bash
-less /var/log/syslog
-```
+### Text Processing
 
-Find unique IP addresses in a log:
 ```bash
-awk '{print $1}' access.log | sort | uniq
+cat file             # Print file
+less file             # Page through file
+head -n 20 file        # First 20 lines
+tail -f file            # Follow file in real time
+grep -rn "text" .        # Recursive search with line numbers
+sort file | uniq          # Sort + remove adjacent duplicates
+cut -d: -f1 file           # Extract delimited field
+awk '{print $1}' file       # Print first column
+sed 's/old/new/g' file       # Replace text (global)
+wc -l file                    # Count lines
 ```
-
-Replace "http" with "https" in a configuration file:
-```bash
-sed -i 's/http:/https:/g' config.conf
-```
-
-## Best Practices
-
-- Use `ls -lah` to inspect files with permissions and human-readable sizes.
-- Prefer `cp -p` when preserving file metadata is important.
-- Use `mv` to rename files without creating duplicates.
-- Be extremely cautious with `rm -rf`; verify the target path before executing.
-- Use `mkdir -p` to create nested directory structures safely.
-- Prefer `less` over `cat` for large files and logs.
-- Combine `sort` with `uniq` because `uniq` only removes adjacent duplicate lines.
-- Use `cut` for simple delimiter-based extraction, `awk` for complex field processing, and `sed` for stream editing and text replacement.
-- Always test `sed` commands without `-i` before editing files in place.
 
-## Process Management
+### Process Management
 
 ```bash
 ps aux             # All processes
@@ -3682,15 +3129,15 @@ jobs               # Background jobs
 nohup cmd &        # Run persistently
 ```
 
-## Permissions
+### Permissions
 
 ```bash
-chmod 755 file     # rwxr-xr-x
-chmod +x file      # Add execute
-chown user:group file  # Change owner
+chmod 755 file          # rwxr-xr-x
+chmod +x file            # Add execute
+chown user:group file     # Change owner
 ```
 
-## Networking
+### Networking
 
 ```bash
 ip addr show       # Show IPs
@@ -3700,7 +3147,7 @@ curl -I url        # HTTP headers
 wget url            # Download
 ```
 
-## Shell Scripting
+### Shell Scripting
 
 ```bash
 #!/bin/bash
@@ -3717,4 +3164,4 @@ trap cleanup EXIT          # Signal handling
 
 ---
 
-This document covers Linux Commands and Shell Scripting from beginner to DevOps-level. Practice these concepts hands-on for best results.
+*This document covers Linux Commands and Shell Scripting from beginner to DevOps-level. Practice these concepts hands-on for best results.*
