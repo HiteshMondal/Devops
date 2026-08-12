@@ -454,6 +454,20 @@ chmod -R 755 /var/www/html
 
 Interview tip: Always explain that `755` is common for scripts/directories, and `644` is standard for regular files.
 
+## What is umask?
+
+`umask` sets the default permissions removed when new files/directories are created.
+
+umask            # show current umask, e.g. 0022
+
+# Default max permissions:
+# Files: 666 (rw-rw-rw-)
+# Directories: 777 (rwxrwxrwx)
+# umask 022 subtracts: files become 644, dirs become 755
+
+umask 027         # more restrictive default
+umask 0022        # typical default
+
 ## How to connect using SSH?
 
 ```bash
@@ -701,6 +715,35 @@ usermod -aG wheel hitesh
 ```bash
 sudo -l          # List what the current user can run with sudo
 ```
+
+## What are /etc/passwd, /etc/shadow, /etc/group?
+
+/etc/passwd - one line per user, colon-separated:
+username:x:UID:GID:comment:home_dir:shell
+
+/etc/shadow - stores hashed passwords (root-only readable):
+username:hashed_password:last_changed:min:max:warn
+
+/etc/group - one line per group:
+groupname:x:GID:member1,member2
+
+cat /etc/passwd | grep hitesh
+cat /etc/group | grep sudo
+sudo cat /etc/shadow
+
+## su vs sudo -i
+
+su username        # switch user, needs THEIR password, keeps some of your env
+su - username       # switch user with full login environment (like a fresh login)
+sudo -i             # switch to root using YOUR password, full root login environment
+sudo -s             # switch to root shell but keep current environment
+
+## who, w, last, lastlog
+
+who              # who is currently logged in
+w                # who is logged in + what they're doing
+last             # history of past logins
+lastlog          # last login time for each user
 
 ## How do you check system logs?
 
@@ -1037,6 +1080,7 @@ systemctl status networking        # Check networking service (Debian/Ubuntu)
 cat /etc/hosts              # Local hostname mappings
 hostname                    # Display hostname
 hostnamectl                 # Show hostname and system information
+hostnamectl set-hostname newname     # change system hostname permanently
 
 # Live network monitoring
 watch -n 1 ss -tuln         # Refresh listening ports every second
@@ -1046,6 +1090,14 @@ watch -n 2 ip addr          # Watch IP address changes
 ## What is tar used for?
 
 `tar` stands for Tape Archive. It bundles multiple files into a single archive (and optionally compresses it).
+
+### zip and unzip
+
+zip archive.zip file1.txt file2.txt      # create zip
+zip -r archive.zip folder/               # zip a directory recursively
+unzip archive.zip                        # extract
+unzip -l archive.zip                     # list contents without extracting
+unzip archive.zip -d /target/dir/        # extract to specific directory
 
 ### Flags Explained
 
@@ -1496,6 +1548,24 @@ $#           # Number of arguments
 $@           # All arguments (preserves each argument)
 $*           # All arguments (as a single string)
 ```
+## export and environment variables
+
+By default, a variable is only available in the current shell. `export` makes it available to any child processes/subshells spawned from that shell.
+
+# Shell variable (local to this shell only)
+name="Hitesh"
+bash -c 'echo $name'    # prints nothing - child shell can't see it
+
+# Environment variable (passed to child processes)
+export name="Hitesh"
+bash -c 'echo $name'    # prints "Hitesh"
+
+# View all environment variables
+env
+printenv
+
+# Export inline for a single command
+MY_VAR=test command
 
 ## What are positional parameters?
 
@@ -1552,6 +1622,24 @@ Usage: ./deploy.sh <environment> <version>
 Example: ./deploy.sh production 1.2.3
 ```
 
+## What is getopts?
+
+getopts parses flag-style options (-v, -f file) instead of relying only on positional order.
+
+```bash
+#!/bin/bash
+while getopts "v:f:h" opt; do
+    case $opt in
+        v) VERSION="$OPTARG" ;;
+        f) FILE="$OPTARG" ;;
+        h) echo "Usage: $0 -v version -f file"; exit 0 ;;
+        \?) echo "Invalid option: -$OPTARG"; exit 1 ;;
+    esac
+done
+```
+
+### Run: ./script.sh -v 1.2.3 -f config.txt
+
 ## How do you write an if condition in bash?
 
 ### Syntax
@@ -1597,6 +1685,17 @@ fi
 | `-w` | File is writable |
 | `-x` | File is executable |
 | `-s` | File exists and is not empty |
+
+## test command (written form)
+
+[ $a -eq $b ] is shorthand for the test command:
+test $a -eq $b
+echo $?          # 0 = true, 1 = false
+
+# These are equivalent:
+if [ -f file.txt ]; then echo "exists"; fi
+if test -f file.txt; then echo "exists"; fi
+
 
 ### Examples
 
@@ -1780,6 +1879,13 @@ for item in "${items[@]}"; do
 done
 ```
 
+## printf vs echo
+
+echo "Hello"                    # simple output, adds newline
+printf "Hello\n"                # more control, no automatic newline
+printf "%s is %d\n" "age" 25    # formatted output like C's printf
+printf "%-10s|%5d\n" "name" 42  # column alignment
+
 ## What is $??
 
 `$?` is the exit status of the last executed command. It's crucial for error handling.
@@ -1828,6 +1934,16 @@ validate_input ""
 echo "Return value: $?"   # Prints: 1
 ```
 
+### exit with custom codes
+
+#!/bin/bash
+if [ ! -f "$1" ]; then
+    echo "Error: file not found"
+    exit 2
+fi
+echo "File found"
+exit 0
+
 ## What is the shebang (#!)?
 
 The shebang (also called hashbang) is the first line of a script. It tells the OS which interpreter to use to run the script.
@@ -1857,6 +1973,26 @@ Best practice: Use `#!/usr/bin/env bash` for portability across systems.
 echo $SHELL       # Your login shell
 echo $0           # Current shell or script name
 ```
+
+## Basic vi/vim commands
+
+vi filename        # open file (or create if it doesn't exist)
+
+# Modes:
+# Normal mode (default) - navigate, delete, copy
+# Insert mode - type text (press i to enter)
+# Command mode - save/quit (press : to enter)
+
+i          # enter insert mode
+Esc        # back to normal mode
+:w         # save
+:q         # quit
+:wq        # save and quit
+:q!        # quit without saving
+dd         # delete current line
+yy         # copy (yank) current line
+p          # paste
+/text      # search for "text"
 
 ## How to run a script?
 
@@ -2125,6 +2261,26 @@ for server in "${servers[@]}"; do
 done
 ```
 
+## String manipulation
+
+str="Hello World"
+
+echo ${#str}              # length: 11
+echo ${str:0:5}           # substring from index 0, length 5: "Hello"
+echo ${str:6}              # from index 6 to end: "World"
+echo ${str/World/Bash}    # replace first match: "Hello Bash"
+echo ${str//o/0}          # replace all matches: "Hell0 W0rld"
+echo ${str^^}              # uppercase: "HELLO WORLD"
+echo ${str,,}              # lowercase: "hello world"
+
+## let and expr (arithmetic alternatives to $(()))
+
+let x=5+3
+echo $x            # 8
+
+y=$(expr 5 + 3)
+echo $y            # 8
+
 ## How to redirect output?
 
 Linux programs use three standard streams:
@@ -2314,6 +2470,14 @@ echo "Critical section - cannot be interrupted"
 sleep 5
 trap SIGINT       # Restore default behavior
 ```
+
+## What is exec?
+
+exec replaces the current shell process with a new command instead of spawning a child.
+
+exec bash              # replaces current shell with a new bash instance
+exec > output.log      # redirect all subsequent script output to a file
+exec 2>&1              # redirect stderr to stdout for rest of script
 
 ## What is the difference between == and -eq?
 
@@ -2658,6 +2822,17 @@ jobs                           # List background jobs
 fg %1                          # Bring job 1 to foreground
 bg %1                          # Send to background
 nohup command &                # Persist after logout
+
+# Suspend and resume
+Ctrl+Z             # suspend current foreground job
+bg                 # resume suspended job in background
+fg                 # bring background job to foreground
+disown %1           # remove job from shell's job table (keeps running after logout)
+
+# kill vs pkill vs killall
+kill PID            # kill by process ID
+pkill nginx          # kill by process name (pattern match)
+killall nginx        # kill all processes with exact name match
 ```
 
 ## Network Commands
@@ -2670,6 +2845,14 @@ curl -o file.txt https://url   # Download file
 wget https://url/file.zip      # Download file
 scp file.txt user@server:/path # Copy file over SSH
 rsync -avz /src user@host:/dst # Sync files over SSH
+scp file.txt user@server:/path     # -r for directories, -P for custom port
+scp -r folder/ user@server:/path
+scp -P 2222 file.txt user@server:/path
+
+rsync -avz /src user@host:/dst
+# -a archive mode (preserves permissions/timestamps/symlinks)
+# -v verbose
+# -z compress during transfer
 ```
 
 ## Firewall (ufw / iptables)
