@@ -85,6 +85,9 @@ cat -- "--spaces in this filename--" # View file --spaces in this filename--
 cat ./-file07    # View file -file07, Without "./" it will show error
 diff passwords.old passwords.new        # Compare the Two Files
 ```
+whoami           # print current logged-in username
+clear            # clear the terminal screen
+exit             # close the current shell session
 
 ## Quoting rules
 
@@ -92,6 +95,11 @@ diff passwords.old passwords.new        # Compare the Two Files
 "double quotes" -> allows $variable expansion
 `backticks` / $(command) -> command substitution
 echo $var can break with spaces/globbing but echo "$var" doesn't
+`command`   -> old-style command substitution (harder to nest, avoid in new scripts)
+$(command)  -> modern preferred style (nests cleanly, more readable)
+
+name=`whoami`    # Old
+name=$(whoami)    # Preferred
 
 ## Default text editors - nano or vim
 
@@ -125,6 +133,16 @@ mv file?.txt archive/    # only single-char-suffix files
 Gotcha: if no file matches the pattern, bash (by default) passes the literal pattern string to the command instead of an empty list - e.g. `ls *.xyz` with no `.xyz` files prints `ls: cannot access '*.xyz'`. This trips up scripts that assume globs always expand to something real.
 
 Globbing is not regex. `*` in globbing means "anything," but in regex `*` means "zero or more of the previous character." Don't mix them up - `grep` uses regex, `ls`/`rm`/`cp` use globbing.
+
+## Absolute vs relative paths
+Absolute path: starts from root (/), always points to the same location
+  e.g. /home/hitesh/projects/app.sh
+
+Relative path: starts from your current directory (pwd), changes based on where you are
+  e.g. ./app.sh or ../projects/app.sh
+
+cd /home/hitesh/projects   # absolute - works from anywhere
+cd projects                # relative - only works if you're already in /home/hitesh
 
 ## Getting Help
 
@@ -223,6 +241,12 @@ Recall shortcuts:
 | `↑` / `↓` | Step backward/forward through history one at a time |
 | `!$` | Last argument of the previous command |
 | `!*` | All arguments of the previous command |
+
+Ctrl+C  -> interrupt/kill current running command
+Ctrl+D  -> send EOF, exits shell or logs out if line is empty
+Ctrl+L  -> clear the terminal screen (same as `clear`)
+Ctrl+A  -> jump cursor to start of line
+Ctrl+E  -> jump cursor to end of line
 
 Practical examples:
 ```bash
@@ -369,6 +393,10 @@ $ ls -a
 
 `.bashrc` and `.profile` are hidden config files - they start with a dot (`.`).
 
+rmdir empty_folder          # removes directory only if it's empty
+rmdir -p a/b/c              # removes nested empty directories
+# For non-empty directories, use rm -r instead
+
 ## What does chmod do?
 
 `chmod` stands for Change Mode. It modifies the read, write, and execute permissions for files and directories.
@@ -450,6 +478,14 @@ chmod -R a+X scripts/         # Add execute only to directories and executable f
 
 # Recursive (apply to directory and all contents)
 chmod -R 755 /var/www/html
+
+# Every file has an owner (user) and a group. chmod controls WHAT each can do (r/w/x).
+# chown and chgrp control WHO the owner/group actually are.
+
+chown hitesh file.txt         # change owner
+chown hitesh:devops file.txt  # change owner AND group
+chgrp devops file.txt         # change group only
+chown -R hitesh:devops dir/   # recursive
 ```
 
 Interview tip: Always explain that `755` is common for scripts/directories, and `644` is standard for regular files.
@@ -716,6 +752,13 @@ usermod -aG wheel hitesh
 sudo -l          # List what the current user can run with sudo
 ```
 
+```bash
+groupadd developers              # create a new group
+groupdel developers               # delete a group
+groupmod -n newname oldname       # rename a group
+gpasswd -a hitesh developers      # add existing user to a group
+```
+
 ## What are /etc/passwd, /etc/shadow, /etc/group?
 
 /etc/passwd - one line per user, colon-separated:
@@ -730,6 +773,12 @@ groupname:x:GID:member1,member2
 cat /etc/passwd | grep hitesh
 cat /etc/group | grep sudo
 sudo cat /etc/shadow
+
+passwd hitesh          # set/change password for user hitesh
+passwd -l hitesh        # lock account (disable login)
+passwd -u hitesh        # unlock account
+chage -l hitesh          # show password expiry info
+chage -M 90 hitesh       # force password change every 90 days
 
 ## su vs sudo -i
 
@@ -1547,6 +1596,16 @@ $2           # Second argument
 $#           # Number of arguments
 $@           # All arguments (preserves each argument)
 $*           # All arguments (as a single string)
+
+# $PATH is a colon-separated list of directories the shell searches for commands.
+
+echo $PATH    # /usr/local/bin:/usr/bin:/bin
+
+# Add a new directory to PATH (append):
+export PATH=$PATH:/home/hitesh/scripts
+
+# Now scripts in that folder can run without ./ or full path
+
 ```
 ## export and environment variables
 
@@ -1639,6 +1698,18 @@ done
 ```
 
 ### Run: ./script.sh -v 1.2.3 -f config.txt
+
+[ ] -> POSIX test command, works in all shells (sh, dash, bash)
+       no pattern matching, word-splitting can cause bugs with unquoted variables
+
+[[ ]] -> bash-only extended test, safer, supports =~ (regex) and && / || directly
+
+# [ ] needs quotes to be safe:
+if [ "$name" == "hitesh" ]; then echo "match"; fi
+
+# [[ ]] handles unquoted vars safely and supports regex:
+if [[ $name == "hitesh" ]]; then echo "match"; fi
+if [[ $email =~ ^[a-z]+@[a-z]+\.com$ ]]; then echo "valid email"; fi
 
 ## How do you write an if condition in bash?
 
@@ -1885,6 +1956,9 @@ echo "Hello"                    # simple output, adds newline
 printf "Hello\n"                # more control, no automatic newline
 printf "%s is %d\n" "age" 25    # formatted output like C's printf
 printf "%-10s|%5d\n" "name" 42  # column alignment
+echo -n "No newline"        # suppress trailing newline
+echo -e "Line1\nLine2"      # enable interpretation of \n, \t escape sequences
+echo "Line1\nLine2"         # without -e, \n prints literally (not a real newline)
 
 ## What is $??
 
@@ -2627,6 +2701,15 @@ The Linux filesystem follows the Filesystem Hierarchy Standard (FHS) which stand
 /boot    # Bootloader files, Linux kernel (vmlinuz), initramfs, and GRUB configuration used during system startup.
 /dev     # Device files representing hardware (disks, USB, terminals, etc.). In Linux, devices are treated as files.
 /etc     # System-wide configuration files (network, users, services, SSH, DNS, etc.). No user data is stored here.
+/etc/hostname  -> stores just this machine's hostname (one line, e.g. "webserver01")
+/etc/hosts     -> maps hostnames/IPs for local name resolution (e.g. 127.0.0.1 localhost)
+
+cat /etc/hostname
+# webserver01
+
+cat /etc/hosts
+# 127.0.0.1   localhost
+# 192.168.1.5 webserver01
 /home    # Home directories for normal users (e.g., /home/alice, /home/john). Stores personal files and settings.
 /lib     # Essential shared libraries required by programs in /bin and /sbin. Similar to DLLs in Windows.
 /media   # Automatically mounted removable media like USB drives, DVDs, and external hard disks.
@@ -2869,6 +2952,11 @@ ufw enable
 iptables -L -n                 # List rules
 iptables -A INPUT -p tcp --dport 80 -j ACCEPT   # Allow port 80
 iptables -A INPUT -j DROP      # Drop all other input
+ifconfig  -> legacy command (net-tools package), still works on many systems but deprecated
+ip addr   -> modern replacement (iproute2 package), preferred on current distros
+
+ifconfig eth0            # old way to view interface info
+ip addr show eth0        # modern equivalent
 ```
 
 # Part 9 - Practical Shell Script Examples
