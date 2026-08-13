@@ -32,54 +32,62 @@ A comprehensive guide to Linux commands and shell scripting: concepts, commands,
 
 ## Core Concepts
 
-### 1. Linux = Kernel vs. OS vs. Distro
+### Linux = Kernel vs. OS vs. Distro
 - **Linux** = just the kernel (created by Linus Torvalds in 1991)
 - A **distribution (distro)** = kernel + GNU tools + package manager + desktop, e.g., Ubuntu, Fedora, Debian
 - "Linux OS" is really **GNU/Linux** — the GNU userland tools (bash, coreutils, etc.) run on top of the Linux kernel
 
-### 2. Open Source & Licensing
+### Open Source & Licensing
 - Linux is released under the **GPL** (GNU General Public License)
 - Source code is free to view, modify, and redistribute
 - This is why so many distros exist — anyone can fork and customize it
 
-### 3. Monolithic Kernel vs. Microkernel
+### Monolithic Kernel vs. Microkernel
 - Linux uses a **monolithic kernel** (all core services run in kernel space for performance)
 - **Kernel space**: where the kernel runs, has direct hardware access
 - **User space**: where normal applications/programs run, isolated for stability/security
 - **System calls** are the bridge between the two
 
-### 4. Multi-user, Multitasking Nature
+### Multi-user, Multitasking Nature
 - Linux was designed from the ground up to let multiple users run multiple processes simultaneously
 - This is why permissions (owner/group/others) exist at all — a direct consequence of being multi-user
 
-### 5. Processes, Threads & Process States
+### Case Sensitivity
+Unlike Windows, Linux treats uppercase and lowercase as completely different characters everywhere — filenames, commands, and variables.
+```bash
+touch File.txt file.txt    # creates TWO separate files
+cd Documents               # fails if the real folder is "documents"
+NAME="Hi"; name="Bye"      # two different variables
+```
+
+### Processes, Threads & Process States
 - **Process vs thread**: a thread is a lightweight unit within a process, sharing memory
 - **fork() and exec()**: fork duplicates a process, exec replaces it with a new program
 - **Process states**: Running, Sleeping, Zombie (finished but not reaped by parent), Orphan (parent died first)
 
-### 6. Swap Space & Virtual Memory
+### Swap Space & Virtual Memory
 When physical RAM fills up, the kernel moves inactive memory pages to disk (swap) to free RAM — a core OS memory-management concept.
 
-### 7. Mounting, /etc/fstab & Partitions
+### Mounting, /etc/fstab & Partitions
 - A **partition** is a physical/logical division of a disk
 - **Mounting** attaches a filesystem (partition, USB drive, network share) to a directory in the tree so it becomes accessible
 - `/etc/fstab` defines what gets mounted automatically at boot
 - This ties into why `/mnt` and `/media` exist in the directory structure
 
-### 8. Shells Are Interchangeable
+### Shells Are Interchangeable
 - `bash` (most common default), `sh`/`dash` (POSIX, lighter, faster), `zsh`, `fish`, `ksh`
 - Your default shell is set in `/etc/passwd` and can be changed with `chsh`
 
-### 9. Init Systems Beyond systemd
+### Init Systems Beyond systemd
 - **SysVinit** (older, sequential scripts in `/etc/init.d`)
 - **Upstart** (used briefly by older Ubuntu)
 - **systemd** is now the modern standard on most distros, but not universal (some minimal distros still avoid it)
 
-### 10. Display Server / Desktop Environment (GUI)
+### Display Server / Desktop Environment (GUI)
 - **X11 vs Wayland** — the underlying display server protocols
 - **Desktop environment** (GNOME, KDE, XFCE) vs **window manager** — different layers of the GUI stack
 
-### 11. Containers vs. Virtual Machines
+### Containers vs. Virtual Machines
 - A **VM** virtualizes entire hardware + OS via a hypervisor
 - A **container** (Docker, etc.) shares the host kernel but isolates processes using namespaces and cgroups
 
@@ -89,6 +97,17 @@ POSIX (Portable Operating System Interface) is a set of IEEE standards specifyin
 ---
 
 ## Shell & Terminal Basics
+
+### Arguments vs Options/Flags
+```text
+command [options] [arguments]
+
+cp -r myfolder backup/
+     |  |         |
+     |  |         +-- arguments: what the command acts on (source, destination)
+     |  +------------ argument
+     +--------------- option/flag: modifies HOW the command behaves
+```
 
 ### Navigating the Filesystem
 
@@ -102,6 +121,16 @@ cd ./-           # View dashed filename "-"
 whoami           # print current logged-in username
 clear            # clear the terminal screen
 exit             # close the current shell session
+```
+### Chaining Commands
+```bash
+cmd1 ; cmd2         # Run cmd1, then cmd2 regardless of whether cmd1 succeeded
+cmd1 && cmd2        # Run cmd2 ONLY IF cmd1 succeeded (exit status 0)
+cmd1 || cmd2        # Run cmd2 ONLY IF cmd1 failed (non-zero exit status)
+
+mkdir backup && cd backup          # cd only runs if mkdir succeeded
+ping -c 1 google.com || echo "No internet"
+apt update && apt upgrade && apt autoremove   # chain multiple steps, stop if any fails
 ```
 
 ### Absolute vs Relative Paths
@@ -241,8 +270,11 @@ Ctrl+D  -> send EOF, exits shell or logs out if line is empty
 Ctrl+L  -> clear the terminal screen (same as `clear`)
 Ctrl+A  -> jump cursor to start of line
 Ctrl+E  -> jump cursor to end of line
-```
 
+cd Doc<Tab>          # completes to "cd Documents/" if it's the only match
+cat my_lo<Tab>       # completes filenames as you type
+ls -<Tab><Tab>       # press Tab twice to see ALL available options for a command
+```
 Practical examples:
 ```bash
 sudo !!                       # re-run last command, but with sudo (classic fix for "permission denied")
@@ -325,6 +357,20 @@ echo "bash_profile loaded" >> ~/.bash_profile
 # open a new terminal and see which message(s) print
 ```
 
+### Getting Unstuck
+When a command or program seems frozen or you're dropped into an unfamiliar screen:
+
+| Situation | Fix |
+|---------|-------------|
+| Stuck inside less, man, or git log | Press q to quit |
+| Command running forever / frozen terminal | Ctrl+C to interrupt/kill it |
+| Accidentally paused a program | Ctrl+Z to suspend, then fg to resume it |
+| Typed cat with no file, terminal waiting |Ctrl+D to send EOF and exit |
+| Stuck inside vi/vim | Press Esc then type :q! and Enter |
+| Terminal looks garbled/broken |Type reset and press Enter |
+
+Rule of thumb: q for pagers/viewers, Ctrl+C for running commands, Ctrl+D for input prompts.
+
 ---
 
 ## File & Directory Commands
@@ -369,6 +415,21 @@ $ ls -a
 **Interview Q&A**
 - *Difference between `ls` and `ls -l`?* `ls` only shows names. `ls -l` shows detailed information.
 - *What does `ls -a` show?* Hidden files starting with `.`.
+
+
+### Filenames with Spaces
+
+Linux allows spaces in filenames, but the shell treats spaces as argument separators — so unquoted filenames with spaces get split incorrectly.
+```bash
+touch "my file.txt"      # creates one file: "my file.txt"
+
+cd my file                # ERROR: shell thinks these are two arguments ("my" and "file")
+cd "my file"               # correct
+cd my\ file                 # also correct (escaped space)
+
+rm my file.txt              # DANGEROUS: tries to remove two files "my" and "file.txt"
+rm "my file.txt"             # correct
+```
 
 ### cat — View / Access Files
 
@@ -1717,12 +1778,15 @@ A shell script is a plain text file containing a series of Linux/Unix commands e
 
 # Variables
 NAME="Hitesh"
+echo "Hello, $name"     # Hello, Hitesh   (double quotes expand variables)
+echo 'Hello, $name'     # Hello, $name    (single quotes DO NOT expand — printed literally)
 DATE=$(date +%Y-%m-%d)
 
 # Main logic
 echo "Hello, $NAME!"
 echo "Today is: $DATE"
 echo "Script completed successfully."
+
 ```
 
 ### Running a Script
@@ -2242,6 +2306,15 @@ fi
 echo "File found"
 exit 0
 ```
+
+### nano basics
+Shortcut	Action
+Ctrl+O	Save (Write Out) — press Enter to confirm filename
+Ctrl+X	Exit
+Ctrl+K	Cut current line
+Ctrl+U	Paste
+Ctrl+W	Search
+Ctrl+G	Help menu
 
 ### Basic vi/vim Commands
 
