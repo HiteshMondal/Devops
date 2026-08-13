@@ -762,6 +762,8 @@ sudo -l          # List what the current user can run with sudo
 
 ```bash
 ssh -p port_number username@hostname
+# If .bashrc has been modified so that when an interactive SSH shell starts, it executes something that logs you out
+ssh -p port_number username@hostname cat readme
 
 # Generate Key
 ssh-keygen
@@ -1057,6 +1059,11 @@ cat /etc/resolv.conf        # View configured DNS servers
 
 # Test specific ports
 nc -zv google.com 443                          # Check if TCP port 443 is open
+
+# Send data to a port
+echo "password" | nc -l 12345    # Listen on a port
+./suconnect 12345    # On another Terminal
+
 telnet google.com 80                           # Test TCP connection (if installed)
 nmap localhost -p 31000-32000                  # Find open ports within a range
 cat /etc/bandit_pass/bandit14 | nc localhost 30000   # Submit password to port 30000 on localhost
@@ -1675,8 +1682,21 @@ base64 -d image.b64 > image_copy.png
 # Encode and Decode JSON
 echo -n '{"name":"Alice"}' | base64
 echo "eyJuYW1lIjoiQWxpY2UifQ==" | base64 -d
+
+# 
 ```
 
+---
+
+## Hashing
+
+```bash
+# Hashing File
+echo "Hello" > test.txt
+md5sum test.txt
+
+echo "hello" | md5sum    # Hashing text
+```
 ---
 
 ## Shell Scripting Basics
