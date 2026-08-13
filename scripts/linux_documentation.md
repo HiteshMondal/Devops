@@ -48,6 +48,15 @@ A comprehensive guide to Linux commands and shell scripting: concepts, commands,
 - **User space**: where normal applications/programs run, isolated for stability/security
 - **System calls** are the bridge between the two
 
+### Everything Is a File
+One of Linux's core design philosophies: as much as possible is represented and accessed as a file, not just documents and folders.
+- Hardware devices → `/dev/sda`, `/dev/null`, `/dev/tty`
+- Running process info → `/proc/1234/`
+- Kernel/hardware settings → `/sys/`
+- Even network sockets and pipes behave like files (can be read/written)
+
+This is why permissions (`chmod`, `chown`) apply almost everywhere, and why redirecting into `/dev/null` "just works" — it's a file like any other, it just happens to discard whatever is written to it.
+
 ### Multi-user, Multitasking Nature
 - Linux was designed from the ground up to let multiple users run multiple processes simultaneously
 - This is why permissions (owner/group/others) exist at all — a direct consequence of being multi-user
@@ -109,6 +118,15 @@ cp -r myfolder backup/
      +--------------- option/flag: modifies HOW the command behaves
 ```
 
+### Reading the Prompt
+
+The shell prompt itself tells you who you are:
+```text
+hitesh@server:~$    # ends in $ -> normal user
+root@server:~#      # ends in # -> root (superuser)
+```
+Always double-check for that `#` before running anything destructive — it means every command runs with full system privileges.
+
 ### Navigating the Filesystem
 
 ```bash
@@ -122,6 +140,7 @@ whoami           # print current logged-in username
 clear            # clear the terminal screen
 exit             # close the current shell session
 ```
+
 ### Chaining Commands
 ```bash
 cmd1 ; cmd2         # Run cmd1, then cmd2 regardless of whether cmd1 succeeded
@@ -174,7 +193,6 @@ mv file?.txt archive/    # only single-char-suffix files
 ```
 
 > **Gotcha:** if no file matches the pattern, bash (by default) passes the literal pattern string to the command instead of an empty list — e.g. `ls *.xyz` with no `.xyz` files prints `ls: cannot access '*.xyz'`.
->
 > **Globbing is not regex.** `*` in globbing means "anything," but in regex `*` means "zero or more of the previous character." `grep` uses regex; `ls`/`rm`/`cp` use globbing.
 
 ### Getting Help
@@ -719,6 +737,13 @@ chmod +t /tmp
 ---
 
 ## Users, Groups & Access
+
+### What Is Root?
+Every Linux system has one special account called **root** (UID `0`). Root bypasses all permission checks — it can read, write, or delete any file, and run any command, regardless of ownership.
+- Normal users can only affect files they own (or have been granted access to)
+- Root can affect anything, which is powerful but dangerous — a typo as root can break the whole system
+- `sudo` lets a permitted user run a single command as root without switching accounts; `su`/`sudo -i` switch to being root fully
+- Rule of thumb: use `sudo` for a single command, avoid staying logged in as root longer than necessary
 
 ### User Management
 
@@ -1787,6 +1812,12 @@ echo "Hello, $NAME!"
 echo "Today is: $DATE"
 echo "Script completed successfully."
 
+# Commenting Out Multiple Lines - Bash has no native block-comment syntax, but this trick works:
+: <<'COMMENT'
+This whole block
+is ignored by the shell
+COMMENT
+# For short blocks, prefixing each line with `#` is simpler and clearer.
 ```
 
 ### Running a Script
@@ -2340,6 +2371,11 @@ p          # paste
 ### Debugging a Script
 
 ```bash
+# Method 0: Check syntax only, without running anything
+bash -n script.sh
+# Reports syntax errors (missing "fi", unmatched quotes, etc.)
+# without executing a single command — always run this first
+
 # Method 1: Run with -x flag (trace mode - prints each command before executing)
 bash -x script.sh
 
@@ -2419,6 +2455,7 @@ is_file_exists() {
         return 1    # False/failure
     fi
 }
+# `return` only exits the function (control goes back to the caller with an exit status in `$?`). `exit` terminates the entire script/shell. Using `exit` inside a function you meant to just `return` from is a common bug — it kills the whole script.
 
 if is_file_exists "/etc/hosts"; then
     echo "File exists!"
@@ -2579,6 +2616,17 @@ echo ${str//o/0}          # replace all matches: "Hell0 W0rld"
 echo ${str^^}              # uppercase: "HELLO WORLD"
 echo ${str,,}              # lowercase: "hello world"
 ```
+
+### Arithmetic Expansion `$(( ))`
+The modern, preferred way to do math in bash — evaluates an expression and returns the result.
+```bash
+echo $((5 + 3))          # 8
+x=$((10 * 2))
+echo $x                  # 20
+echo $((i % 2))           # remainder (used constantly for even/odd checks)
+count=$((count + 1))      # increment a variable
+```
+Supports `+ - * / %` and parentheses for grouping. Prefer this over `let` or `expr` — no risk of word-splitting, and it's easier to read.
 
 ### Arithmetic — let and expr
 
