@@ -32,6 +32,12 @@ A comprehensive guide to Linux commands and shell scripting: concepts, commands,
 
 ## Core Concepts
 
+### What Is a Terminal?
+- Terminal (terminal emulator): the window you type into (e.g. GNOME Terminal, iTerm, Windows Terminal)
+- Shell: the program that reads and runs your commands (bash, zsh, etc.)
+- CLI (Command Line Interface): interacting with the OS via typed text instead of clicking (GUI)
+- The terminal displays it, the shell interprets and executes it
+
 ### Linux = Kernel vs. OS vs. Distro
 - **Linux** = just the kernel (created by Linus Torvalds in 1991)
 - A **distribution (distro)** = kernel + GNU tools + package manager + desktop, e.g., Ubuntu, Fedora, Debian
@@ -56,6 +62,9 @@ One of Linux's core design philosophies: as much as possible is represented and 
 - Even network sockets and pipes behave like files (can be read/written)
 
 This is why permissions (`chmod`, `chown`) apply almost everywhere, and why redirecting into `/dev/null` "just works" — it's a file like any other, it just happens to discard whatever is written to it.
+
+### File extensions don't matter in Linux
+Unlike Windows, Linux doesn't rely on file extensions to determine file type or how to open a file — .txt, .sh, or no extension at all makes no functional difference to the OS. What makes a file "executable" is its permission bits (x), not its name. file filename tells you the actual type by inspecting its content, not its name.
 
 ### Multi-user, Multitasking Nature
 - Linux was designed from the ground up to let multiple users run multiple processes simultaneously
@@ -116,6 +125,8 @@ cp -r myfolder backup/
      |  |         +-- arguments: what the command acts on (source, destination)
      |  +------------ argument
      +--------------- option/flag: modifies HOW the command behaves
+# single-dash flags can be combined like ls -la = ls -l -a
+# Double-dash flags are always spelled out (--help, --verbose) and can't be combined
 ```
 
 ### Reading the Prompt
@@ -136,6 +147,8 @@ cd ..            # go up one level
 cd ~             # go to home directory
 cd -             # go to previous directory
 cd ./-           # View dashed filename "-"
+cd .             # Current Directory
+cd ..            # Parent Directory or the directory immediately above the current one
 whoami           # print current logged-in username
 clear            # clear the terminal screen
 exit             # close the current shell session
@@ -288,6 +301,9 @@ Ctrl+D  -> send EOF, exits shell or logs out if line is empty
 Ctrl+L  -> clear the terminal screen (same as `clear`)
 Ctrl+A  -> jump cursor to start of line
 Ctrl+E  -> jump cursor to end of line
+Ctrl+Shift+C  -> copy (in most Linux terminals)
+Ctrl+Shift+V  -> paste
+(Ctrl+C / Ctrl+V are NOT copy-paste in the terminal — Ctrl+C interrupts a running command)
 
 cd Doc<Tab>          # completes to "cd Documents/" if it's the only match
 cat my_lo<Tab>       # completes filenames as you type
@@ -1473,6 +1489,14 @@ watch free -h             # Refresh memory usage
 watch df -h                # Refresh disk usage
 watch uptime                # Refresh system load
 watch ps aux                 # Refresh process list
+
+# Shutdown/reboot commands
+shutdown -h now         # Shutdown immediately
+shutdown -r now         # Reboot immediately
+reboot                  # Reboot
+poweroff                # Power off
+shutdown -r +5 "Rebooting in 5 mins"   # Scheduled with message
+shutdown -c             # Cancel a scheduled shutdown
 ```
 
 ---
@@ -1821,7 +1845,7 @@ COMMENT
 ```
 
 ### Running a Script
-
+./script.sh instead of just script.sh - Even after chmod +x, running just script.sh fails with "command not found" — the current directory (.) is intentionally not in $PATH by default (security reasons: prevents accidentally running a malicious script named like a real command). That's why you must specify the path explicitly with ./script.sh.
 ```bash
 # Method 1: Make executable and run
 chmod +x hello.sh
@@ -2348,6 +2372,7 @@ Ctrl+W	Search
 Ctrl+G	Help menu
 
 ### Basic vi/vim Commands
+> New to the terminal? Start with `nano` — it's simpler and shows shortcuts on-screen. Learn `vi`/`vim` once you're comfortable, since it's the editor guaranteed to exist on every server.
 
 ```bash
 vi filename        # open file (or create if it doesn't exist)
