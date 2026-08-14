@@ -29,6 +29,14 @@ internally — just what to send and what you'll get back. Every single interact
 API** underneath. Kubernetes works the same way: `kubectl` talks to the **Kubernetes API
 server**.
 
+### What does "REST" mean when people say "REST API"?
+
+REST (Representational State Transfer) is just a common set of conventions for designing
+HTTP-based APIs — using standard HTTP methods (GET to read, POST to create, PUT/PATCH to
+update, DELETE to remove) against predictable URLs ("resources"), and returning
+JSON. When this doc later mentions API Gateway's "REST APIs" type, this is the convention
+it's referring to.
+
 ### What is HTTP/HTTPS, and what is a "request" and "response"?
 
 HTTP (HyperText Transfer Protocol) is the standard way clients and servers talk to each
@@ -81,12 +89,100 @@ Provisioning just means "creating and setting up a resource so it's ready to use
 e.g., "provisioning an EC2 instance" means AWS allocating the actual virtual machine and
 handing it to you. You'll see this word constantly in AWS docs.
 
+### What does "managed" mean when AWS calls something a "managed service"?
+
+A managed service means AWS operates the underlying infrastructure for you — patching the
+OS, replacing failed hardware, handling backups, scaling the engine — instead of you doing
+it yourself on a raw EC2 instance. "Managed" doesn't mean "no configuration"; you still set
+options (instance size, backup window, security groups) — it means the *operational burden*
+(patching, hardware failure, uptime of the underlying box) shifts from you to AWS. This is
+the single biggest cost/control trade-off in every AWS service choice (EC2 vs RDS, self-
+managed Kubernetes vs EKS, running your own Redis vs ElastiCache).
+
+### What is a physical server vs. a virtual machine (VM)?
+
+A physical server is one real, physical computer. A **virtual machine** is a software-based
+simulation of a computer that runs *on top of* a physical machine, sharing its hardware with
+other VMs. A thin layer of software called a **hypervisor** divides one physical machine's
+CPU/RAM/disk into multiple isolated virtual machines, each thinking it has the whole computer
+to itself. This process — carving one physical machine into many independent virtual ones — is called
+**virtualization**, and it's the foundational trick that makes cloud computing possible.
+This is the foundational trick that makes cloud computing possible: AWS runs
+thousands of customer VMs on a much smaller number of physical machines. When you launch an
+EC2 "instance," you are really being handed one virtual machine on some physical host AWS
+manages — you never see or choose the physical hardware.
+
+### What is bandwidth, throughput, and latency?
+
+These three get used loosely and interchangeably by beginners but mean different things:
+
+- **Bandwidth** — the maximum amount of data a connection *could* carry per second (the
+  size of the pipe).
+- **Throughput** — the amount of data actually moving per second in practice (often lower
+  than bandwidth due to overhead, congestion, etc.).
+- **Latency** — the delay before data starts arriving at all, usually measured in
+  milliseconds (how far the data has to travel + processing delay). A connection can have
+  huge bandwidth but still feel "laggy" if latency is high.
+
+This distinction matters later in this guide: CloudFront and Route 53 latency-based routing
+are about reducing *latency*; NAT Gateway data processing charges and EBS volume types are
+about *throughput*.
+
+### What is synchronous vs. asynchronous, in plain terms?
+
+**Synchronous** means one step waits for the previous step to fully finish before
+continuing — like a phone call. **Asynchronous** means a step fires off and moves on
+without waiting for a response — like sending a text message. This distinction explains
+the RDS Multi-AZ vs. Read Replica difference later in this guide: Multi-AZ replicates
+*synchronously* (the standby must confirm the write before it's considered done, so no data
+is lost on failover), while Read Replicas replicate *asynchronously* (faster, but the
+replica can lag slightly behind).
+
+### What is a digital certificate, and what is TLS/SSL doing with it?
+
+A **certificate** is a small file that cryptographically proves a server is who it claims
+to be (e.g., proves you're really talking to `example.com` and not an impostor), issued by
+a trusted **Certificate Authority (CA)**. HTTPS uses a certificate to both verify identity
+and set up encryption for the session. In AWS, **ACM (AWS Certificate Manager)** issues and
+auto-renews these certificates for free, and they're commonly attached to an ALB or
+CloudFront distribution to enable HTTPS — this is the piece that was missing context
+earlier when this guide mentions "ALB terminates TLS."
+
+### What is caching, and why does it make things faster?
+
+Caching means storing a copy of data somewhere faster/closer to where it's needed, so
+repeat requests don't have to redo expensive work (a database query, a long computation, a
+trip across the internet). The trade-off is that cached data can become **stale** (out of
+date) until it's refreshed or expires. This concept underlies CloudFront (caches content at
+edge locations) and Amazon ElastiCache (see the new ElastiCache section added below).
+
+### What does "99.9% uptime" actually mean in real downtime?
+
+Availability percentages ("nines") translate to allowed downtime per year:
+
+| Availability | Downtime/year |
+|---|---|
+| 99% ("two nines") | ~3.65 days |
+| 99.9% ("three nines") | ~8.76 hours |
+| 99.99% ("four nines") | ~52.6 minutes |
+| 99.999% ("five nines") | ~5.26 minutes |
+
+This is worth being able to do in your head — SLAs and this guide's "S3 is 11 nines
+durable" claim only mean something once you can translate the percentage into real time.
+
 ### What is an "endpoint"?
 
 An endpoint is the URL/address you send a request to in order to talk to a specific AWS
 service — e.g., `s3.ap-south-1.amazonaws.com`. Every AWS service has its own endpoint per
 region. When you use the Console/CLI/SDK, they're just building requests to these endpoints
 for you behind the scenes.
+
+### What is a "resource" in AWS?
+
+A resource is anything you create or use inside AWS — an EC2 instance, an S3 bucket, a
+VPC, an RDS database, an IAM role. Every resource has a unique identifier called an
+**ARN (Amazon Resource Name)**, which is why IAM policies target the `Resource` field with
+an ARN rather than a name.
 
 ### What does "Elastic" mean in names like EC2, Elastic Load Balancing, Elastic IP?
 
@@ -100,6 +196,15 @@ The format is `<continent>-<direction>-<number>`: `ap-south-1` = Asia Pacific, S
 first region built there (Mumbai). `us-east-1` = US, East, first region (N. Virginia).
 The number increments as AWS adds more regions in that geography. Knowing this helps you
 recognize/guess region codes without memorizing a lookup table.
+
+### Why does `us-east-1` keep showing up even when I'm not using it?
+
+`us-east-1` (N. Virginia) is AWS's oldest and largest region, and several "global" AWS
+services are technically anchored there behind the scenes — e.g., IAM's console defaults
+to it, and an ACM certificate **must** be requested in `us-east-1` specifically if it's
+going to be attached to a CloudFront distribution, regardless of where your other
+resources live. Beginners often hit a confusing error only because of this hidden
+region requirement.
 
 ### What is the difference between a Global, Regional, and Zonal (AZ-scoped) resource?
 
@@ -121,6 +226,22 @@ different AZ, and you can't reference a regional resource (VPC) from a different
 | JWT  | JSON Web Token — a signed token used to prove identity between systems |
 | HA   | High Availability — designed to keep running through failures |
 | IaC  | Infrastructure as Code — defining infrastructure in text files instead of clicking in a console |
+
+### What does an ARN actually look like, structurally?
+
+Example: `arn:aws:s3:::my-bucket/*` (S3 is global, so region/account are blank) or
+`arn:aws:rds:ap-south-1:123456789012:db:mydb` — this is the exact string IAM policies use
+in their `Resource` field.
+
+### What is the difference between public, private, and hybrid cloud?
+
+- **Public cloud** — infrastructure owned and operated by a third party (AWS, Azure, GCP)
+  and shared across many customers, rented on demand. This is what "AWS" is.
+- **Private cloud** — infrastructure dedicated to a single organization, either on their
+  own premises or hosted, giving more control but losing the pay-as-you-go elasticity.
+- **Hybrid cloud** — a mix of both, e.g., sensitive workloads stay on-premises while
+  overflow or new workloads run in AWS, connected via VPN or Direct Connect (covered later
+  in this doc).
 
 ### What is cloud computing, and what are the three service models (IaaS, PaaS, SaaS)?
 
@@ -167,6 +288,18 @@ AWS bills **pay-as-you-go** — no upfront commitment, billed per hour/second/re
 3. **AWS SDKs** — language-specific libraries (boto3 for Python, AWS SDK for JS, etc.) for calling AWS APIs directly from application code.
 
 This project uses Terraform (which itself calls the AWS API under the hood) rather than the Console or CLI directly — a fourth, IaC-based way to reach the same APIs.
+
+### What are the main categories AWS services fall into?
+
+AWS has 200+ services, but almost everything fits into a handful of buckets:
+
+- **Compute** — runs your code/apps (EC2, Lambda, ECS, EKS)
+- **Storage** — holds files/data (S3, EBS, EFS, FSx)
+- **Database** — structured data storage (RDS, DynamoDB)
+- **Networking** — connects everything (VPC, Route 53, CloudFront, ELB)
+- **Security & Identity** — controls access (IAM, KMS, Secrets Manager, WAF/Shield)
+- **Monitoring** — watches everything (CloudWatch, CloudTrail, Config)
+- **Developer Tools** — builds/ships code (CodePipeline, CodeBuild, CodeDeploy)
 
 ### How do you actually set up the AWS CLI for the first time?
 
@@ -337,6 +470,14 @@ The `aws_lbc` IAM policy is scoped extremely narrowly — the `elasticloadbalanc
 
 `sts:AssumeRole` is used when a principal (an IAM user, another role) directly assumes a role, typically cross-account. `sts:AssumeRoleWithWebIdentity` is used when the caller authenticates via an external OIDC/SAML identity provider (Kubernetes' projected service-account token, Google, Facebook login, etc.) instead of native IAM credentials — this is the mechanism underlying IRSA.
 
+### How do an application's end users (customers) log in — is that IAM?
+
+No. IAM manages access to **AWS itself** (who can create an S3 bucket, who can deploy to
+EKS) — it is not meant for your application's end users. **Amazon Cognito** is AWS's
+service for that: it handles user sign-up/sign-in, password resets, and social/enterprise
+login (Google, SAML, etc.) for your own application's customers, issuing JWT tokens your
+app can verify — a completely separate concern from AWS account access.
+
 ---
 
 ## VPC & Networking
@@ -378,6 +519,17 @@ operates at Layer 7 (can read URLs, headers, and route by content).
 
 A firewall is a set of rules that decides what network traffic is allowed in or out.
 Security Groups and NACLs (covered later in this doc) are AWS's two firewall mechanisms.
+
+### What is a VPN, and how is a Site-to-Site VPN different from Direct Connect?
+
+A VPN (Virtual Private Network) creates an encrypted tunnel over the public internet between
+two networks — e.g., your office network and your VPC — so traffic between them is private
+even though it physically travels over the internet. **AWS Site-to-Site VPN** sets this up
+in minutes and is billed per connection-hour. **AWS Direct Connect** is a completely
+different approach: a dedicated, private physical network link from your data center to
+AWS that never touches the public internet at all — more expensive and slower to set up
+(weeks), but lower latency and more consistent throughput, used when a business needs
+guaranteed bandwidth (e.g., large steady data transfers, trading systems).
 
 ### What is TCP vs UDP, in plain terms?
 
@@ -425,11 +577,30 @@ orchestrator (like Kubernetes) sends to a server to confirm it's still working c
 If a server fails enough consecutive health checks, it's automatically removed from
 rotation until it recovers.
 
+### What is a Gateway in networking, generically?
+
+A gateway is a component that connects one network to another, usually translating or
+controlling traffic as it passes through. In AWS you'll meet several: an **Internet
+Gateway** connects a VPC to the public internet, a **NAT Gateway** lets private resources
+reach out to the internet without being reachable from it, and a **Transit Gateway**
+(not covered in depth here) connects many VPCs together.
+
+### What is VPC Peering?
+
+A private, direct network connection between two VPCs (in the same or different AWS
+accounts/regions) that lets resources in each communicate using private IPs, as if they
+were on the same network — without traversing the public internet. It's non-transitive
+(if VPC A peers with B, and B peers with C, A cannot reach C through B) — which is exactly
+the limitation a **Transit Gateway** solves once you need many VPCs interconnected.
+
 ### What is a VPC, and what are its core building blocks?
 
 A VPC (Virtual Private Cloud) is your own logically isolated network within AWS where you control the IP range, subnets, route tables, and gateways. Core building blocks:
 
 - **Subnet** — a slice of the VPC's IP range tied to one AZ; public or private.
+- > A subnet is **public** if its route table sends `0.0.0.0/0` traffic to an **Internet
+> Gateway**. It's **private** if that traffic instead goes to a **NAT Gateway** (or nowhere).
+> Nothing about the subnet itself is special — it's purely determined by its route table.
 - **Route Table** — rules that decide where subnet traffic is sent.
 - **Internet Gateway** — lets public subnets reach the internet.
 - **NAT Gateway** — lets private subnets reach OUT to the internet only.
@@ -466,11 +637,26 @@ Instance types are grouped into families optimized for different workloads:
 - **Memory optimized (r, x)** — high memory-to-CPU ratio; in-memory databases, caching.
 - **Storage optimized (i, d)** — high-speed local storage; data warehousing.
 
+**Reading an instance type name, e.g. `t3.micro`:**
+- `t` = family (general purpose, burstable)
+- `3` = generation (higher number = newer hardware, usually better price/performance)
+- `micro` = size (nano < micro < small < medium < large < xlarge < 2xlarge...)
+
+So `m5.large` = general purpose, 5th generation, large size. Higher generation numbers of
+the same family are almost always a free performance upgrade at the same or lower price.
+
 `t3.micro` (used in this project's Free Tier resources) is a general-purpose burstable instance suited to low, variable workloads rather than sustained high CPU.
 
 ### What is a resource tagging strategy, and why does it matter beyond Kubernetes discovery?
 
 Beyond the EKS-specific discovery tags covered later, a basic tagging convention — `Name`, `Environment` (dev/staging/prod), `Owner`, `CostCenter` — applied consistently across all resources enables cost allocation reports in Cost Explorer, easier resource search/filtering in the Console, and automated policies (e.g., "delete anything tagged `Environment=dev` older than 7 days").
+
+### What is an Auto Scaling Group (ASG), in plain terms?
+
+A group of EC2 instances AWS manages together as one unit. You set a **min**, **max**, and
+**desired** count; AWS automatically launches new instances (using a Launch Template) to
+reach the desired count, replaces any that fail health checks, and can scale the count up
+or down automatically based on demand (CPU load, queue length, a schedule, etc.).
 
 ### What are the EC2 purchasing options?
 
@@ -479,6 +665,23 @@ Beyond the EKS-specific discovery tags covered later, a basic tagging convention
 - **Savings Plans** — similar discount to RIs but flexible across instance families/regions.
 - **Spot Instances** — bid on unused AWS capacity for up to 90% off; AWS can reclaim with a 2-minute warning — only for fault-tolerant/stateless workloads.
 - **Dedicated Hosts/Instances** — physical server dedicated to you; needed for licensing (e.g., BYOL Windows Server) or compliance requirements.
+
+### What is IOPS?
+
+IOPS (Input/Output Operations Per Second) measures how many individual read/write
+operations a storage device can handle per second — a different measurement from raw
+throughput (MB/s). A workload with many small, random reads/writes (like a busy database)
+is limited more by IOPS than by total throughput; a workload with large sequential
+transfers (like log file processing) cares more about throughput. This is why the EBS
+volume type table below lists IOPS as the deciding factor for database workloads (io1/io2)
+versus throughput for sequential ones (st1).
+
+### What is a snapshot, in general?
+
+A snapshot is a point-in-time copy of a storage volume or database, stored in S3 behind
+the scenes. The first snapshot copies everything; every snapshot after that only stores
+what *changed* since the last one (incremental), which keeps them cheap and fast even for
+large volumes. Snapshots are how EBS backups and RDS backups both work under the hood.
 
 ### What are the main EBS volume types, and when do you pick each?
 
@@ -750,6 +953,14 @@ Kubernetes RBAC (`Role`, `ClusterRole`, `RoleBinding`) controls **what an alread
 
 Supported databases: MySQL, PostgreSQL, Oracle, SQL Server, MariaDB, and Aurora.
 
+### What is Amazon Aurora, and how is it different from "regular" RDS PostgreSQL/MySQL?
+
+Aurora is AWS's own MySQL- and PostgreSQL-compatible database engine, re-engineered for the
+cloud — storage is automatically replicated 6 ways across 3 AZs, it can scale storage up to
+128TB without downtime, and read replicas add much faster (sub-10-second) than standard RDS
+replicas. It costs more than standard RDS but is often chosen over vanilla PostgreSQL/MySQL
+on RDS specifically for higher availability and performance at scale.
+
 ### What is a relational database, and what does "relational" mean?
 
 A relational database stores data in tables made of rows and columns (like a spreadsheet),
@@ -909,7 +1120,49 @@ The EC2 **Instance Metadata Service** exposes instance details (including, histo
 
 ---
 
+## Amazon ElastiCache
+
+Amazon ElastiCache is a fully managed **in-memory caching** service, supporting the Redis
+and Memcached engines. It sits between your application and a slower backing store
+(typically RDS or DynamoDB) to serve frequently-requested data from memory instead of disk,
+cutting response times from milliseconds-with-a-query to sub-millisecond.
+
+### Why put a cache in front of RDS instead of just scaling the database?
+
+Databases are relatively expensive and slow to scale for read-heavy workloads (a full read
+replica is a whole extra instance). A cache absorbs repeat reads for "hot" data (e.g., a
+product page viewed thousands of times) directly from memory, so the database only needs to
+handle writes and genuinely new reads — often a far cheaper and faster way to scale read
+capacity than adding more database instances.
+
+### What is the difference between Redis and Memcached on ElastiCache?
+
+- **Memcached** — simpler, multi-threaded, purely for caching (no persistence, no
+  replication); good for straightforward "cache small objects" use cases.
+- **Redis** — supports data persistence (can survive a restart), replication and
+  Multi-AZ automatic failover (like RDS), richer data structures (lists, sets, sorted
+  sets), and pub/sub messaging — effectively a small, fast, in-memory database in its own
+  right, not just a cache.
+
+### What is "cache invalidation" and why is it considered a hard problem?
+
+When the underlying data changes (someone updates their profile), the cached copy becomes
+stale until it's refreshed or removed. Deciding *when* to expire or update cached entries
+without either serving stale data or defeating the purpose of caching by refreshing too
+often is a classic hard problem in distributed systems — commonly handled with a
+time-based expiry (TTL) as a simple baseline, plus explicit invalidation on writes for
+data that must always be fresh.
+
+---
+
 ## Load Balancing (ALB/NLB) & Ingress
+
+### What is "Elastic Load Balancing (ELB)," and how does it relate to ALB/NLB/CLB?
+
+ELB is the umbrella AWS service name for load balancing; it offers three load balancer
+*types*: **ALB** (Layer 7, HTTP/HTTPS — covered below), **NLB** (Layer 4, TCP/UDP —
+covered below), and the legacy **Classic Load Balancer (CLB)**, which predates both and
+is no longer recommended for new applications since ALB/NLB each do its job better.
 
 ### What's the difference between an Application Load Balancer (ALB) and a Network Load Balancer (NLB)?
 
@@ -981,6 +1234,13 @@ First, check for **S3 versioning** on the state bucket (a strongly recommended b
 
 ## Serverless & Event-Driven Services
 
+### What does "serverless" actually mean?
+
+Serverless doesn't mean there's no server — it means you never provision, patch, or manage
+one. You give AWS your code or configuration, and it runs the underlying compute only when
+needed, scaling automatically and charging only for actual usage. Lambda, Fargate, and
+DynamoDB are the serverless examples in this doc.
+
 ### What is AWS Lambda, and what are its main limitations?
 
 Lambda runs code in response to events (API calls, S3 uploads, queue messages, schedules) without provisioning or managing servers — you pay only for actual execution time (billed in milliseconds) and are billed nothing when idle. Limitations include a **15-minute maximum execution timeout**, a **10 GB memory ceiling** (CPU scales proportionally with memory), **/tmp storage limited to 10 GB**, deployment package size limits (250 MB unzipped, larger via container images up to 10 GB), and **cold starts** — the latency incurred when a new execution environment must be initialized (worse for languages with heavier runtime init like Java/.NET than for Node.js/Python/Go).
@@ -992,6 +1252,16 @@ A cold start happens when Lambda has no warm execution environment available and
 ### What's the difference between SQS and SNS, and when would you use each — potentially together?
 
 **SQS (Simple Queue Service)** is a **pull-based message queue** — consumers poll for messages, and each message is typically processed by exactly one consumer (in standard queues, at-least-once delivery; FIFO queues add strict ordering and exactly-once processing). **SNS (Simple Notification Service)** is a **pub/sub push-based** topic — a single published message can fan out to many subscribers simultaneously (SQS queues, Lambda functions, HTTP endpoints, email). A common pattern is **SNS fan-out to SQS**: publish once to an SNS topic, and have multiple independent SQS queues subscribed so each downstream service processes the same event independently and durably, decoupling producers from an arbitrary number of consumers.
+
+### What is Amazon EventBridge, and how is it different from SQS/SNS?
+
+EventBridge is AWS's event bus — it routes events (from AWS services, SaaS partners, or
+your own applications) to targets (Lambda, SQS, Step Functions, etc.) based on **rules**
+that match event content, and it can also run targets on a **schedule** (replacing the
+older "CloudWatch Events" cron-style triggers). Unlike SNS's simple fan-out, EventBridge
+rules can filter on the actual JSON payload of an event, making it the standard choice for
+routing structured AWS-service events (e.g., "an EC2 instance just changed state") rather
+than plain pub/sub messages.
 
 ### What is API Gateway, and what are the three API types it supports?
 
@@ -1005,9 +1275,23 @@ DynamoDB is a fully managed, serverless NoSQL key-value/document database offeri
 
 ## Content Delivery, DNS & Global Services
 
+### What is a CDN (Content Delivery Network), in plain terms?
+
+A CDN is a network of servers positioned physically close to end users around the world,
+each holding a cached copy of your content, so a user in Mumbai gets served from a nearby
+edge location instead of round-tripping to your origin server in another country. This
+reduces latency and takes load off your origin. CloudFront is AWS's CDN implementation.
+
 ### What is CloudFront, and how does it interact with an S3 origin vs an ALB origin?
 
 CloudFront is AWS's CDN, caching content at edge locations close to end users to reduce latency and origin load. With an **S3 origin**, it's typically used for static assets, ideally with **Origin Access Control (OAC)** so the S3 bucket itself stays fully private and is only reachable through CloudFront. With an **ALB/custom origin**, CloudFront can front dynamic applications, terminate TLS at the edge, provide DDoS absorption (via AWS Shield integration), and cache API responses selectively based on cache-control headers or custom cache policies — while still forwarding genuinely dynamic requests back to the origin.
+
+### What is Amazon Route 53?
+
+Route 53 is AWS's managed DNS service — it translates domain names into IP addresses (as
+covered earlier under "What is DNS") and can also register domain names outright. It's
+"Route 53" because DNS traditionally runs on port 53. Beyond plain DNS, it supports the
+routing policies and health checks below.
 
 ### What are the common Route 53 (DNS) record types?
 
@@ -1056,6 +1340,35 @@ CAP theorem states a distributed system can only guarantee two of three properti
 
 EBS volumes are **network-attached, persistent block storage** that survive instance stop/termination (unless explicitly configured to delete on termination) and can be detached/reattached to other instances. **Instance Store** is physically attached to the host hardware, offers higher IOPS/lower latency, but data is **ephemeral** — lost on instance stop, terminate, or underlying hardware failure.
 
+### What is AWS Organizations, and why would a company use multiple AWS accounts instead of one?
+
+AWS Organizations lets you centrally manage multiple AWS accounts as one unit — consolidated
+billing, shared guardrails (via SCPs, covered next), and easier separation of environments.
+Companies commonly use **separate AWS accounts per environment or team** (e.g., one for
+`dev`, one for `staging`, one for `prod`, sometimes one per team) rather than one account
+with namespacing, because a full account boundary is a much stronger blast-radius limit
+than IAM alone — a mistake or compromise in the `dev` account can't touch `prod` resources
+at all, since they're not even reachable without separately assuming a role into that
+account.
+
+### What is IAM Identity Center (formerly AWS SSO), and how is it different from a regular IAM user?
+
+IAM Identity Center is AWS's centralized service for managing **human access** across
+multiple AWS accounts through a single sign-on — you log in once and get a portal listing
+every account/role you're allowed to assume, rather than juggling separate IAM users and
+passwords per account. It's the recommended way for people (as opposed to applications or
+workloads) to access AWS, reserving plain IAM users for edge cases like local testing or
+services that can't use federated identity.
+
+### Where do you find your AWS Account ID, and why does it matter?
+
+Your 12-digit AWS Account ID is shown in the Console's top-right account menu, or via
+`aws sts get-caller-identity` in the CLI. It matters because IAM policies, resource ARNs,
+and cross-account access rules are frequently scoped by account ID — e.g., an S3 bucket
+policy granting access to `arn:aws:iam::123456789012:root` is granting access to an entire
+other AWS account, so getting the ID right (and knowing whose account it belongs to) is a
+real security-relevant detail, not just a label.
+
 ### What is an AWS Organizations Service Control Policy (SCP), and how does it differ from an IAM policy?
 
 An SCP is applied at the **AWS Organizations** level (to an account, OU, or the whole organization) and defines the **maximum available permissions** for every IAM principal in that scope — it never *grants* permissions by itself, only restricts what IAM policies within the account can actually allow. Even an account's root user cannot exceed what an SCP permits. This is used for org-wide guardrails (e.g., "no region except `ap-south-1` and `us-east-1` may ever be used," "S3 buckets can never be made public") that no individual account admin can override.
@@ -1079,6 +1392,14 @@ SSM Session Manager provides secure shell access to instances **without opening 
 ---
 
 ## Billing, Cost Visibility & Support (Beginner Essentials)
+
+### How is AWS usage actually billed — by the hour, minute, or second?
+
+Most compute (EC2 Linux, Lambda) bills **per second** with a 60-second minimum; Windows
+EC2 and RDS typically bill **per hour** (rounded up). Storage (S3, EBS) bills per GB
+per month, prorated. This is why stopping an EC2 instance you're not using immediately
+saves money, but a running RDS instance keeps charging even if idle — only deleting or
+stopping it (RDS can be stopped for up to 7 days) stops the charge.
 
 ### How do you avoid an unexpected AWS bill as a beginner?
 
@@ -1107,6 +1428,15 @@ Three things to set up on day one, before touching any other service:
    is a common beginner mistake.
 5. Install and configure the **AWS CLI** (`aws configure`) if you'll be scripting or using
    Terraform, which authenticates via the CLI's credentials under the hood.
+
+### I finished testing — how do I make sure I'm not billed later?
+
+Free Tier limits don't delete resources for you. Before walking away, check and delete:
+1. Running **EC2 instances** (stopped ≠ free — attached EBS still bills).
+2. **RDS instances** (stopping only pauses billing for ~7 days, then AWS auto-restarts it).
+3. **NAT Gateways** and unattached **Elastic IPs** — both bill even when idle.
+4. **EBS volumes/snapshots** left behind after terminating an instance.
+5. **Load Balancers (ALB/NLB)** — billed per hour whether or not they receive traffic.
 
 ---
 
