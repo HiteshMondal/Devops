@@ -79,9 +79,19 @@ NAME="Hi"; name="Bye"      # two different variables
 ```
 
 ### Processes, Threads & Process States
-- **Process vs thread**: a thread is a lightweight unit within a process, sharing memory
-- **fork() and exec()**: fork duplicates a process, exec replaces it with a new program
-- **Process states**: Running, Sleeping, Zombie (finished but not reaped by parent), Orphan (parent died first)
+
+- **Process vs thread**: a thread is a lightweight unit within a process, sharing memory.
+- **fork()**: creates a new process by duplicating the calling process.
+- **exec()**: replaces the current process with another program.
+- **Process states**: Running, Sleeping, Zombie (finished but not reaped by parent), Orphan (parent died first).
+
+#### `exec` Command
+
+The shell builtin `exec` replaces the current shell process with the specified program.
+
+```bash
+exec /bin/bash
+```
 
 ### Swap Space & Virtual Memory
 When physical RAM fills up, the kernel moves inactive memory pages to disk (swap) to free RAM — a core OS memory-management concept.
@@ -203,6 +213,13 @@ ls *.sh                  # all shell scripts
 rm backup_*.tar.gz       # delete all matching backups
 cp report{,.bak}         # expands to: cp report report.bak
 mv file?.txt archive/    # only single-char-suffix files
+```
+What does nullglob do?
+If a wildcard (*, *.txt, etc.) doesn't match any file, Bash normally keeps the wildcard as it is.
+```bash
+echo *.txt               # Without nullglob output: *.txt
+shopt -s nullglob
+echo *.txt               # output:
 ```
 
 > **Gotcha:** if no file matches the pattern, bash (by default) passes the literal pattern string to the command instead of an empty list — e.g. `ls *.xyz` with no `.xyz` files prints `ls: cannot access '*.xyz'`.
@@ -351,6 +368,15 @@ find . -name "*.jpg" | xargs -I {} cp {} /backup/
 ps aux | grep node | awk '{print $2}' | xargs kill -9
 ```
 
+### export — Set Environment Variables
+
+`export` creates an environment variable and makes it available to programs started by the current shell.
+
+```bash
+export NAME="Hitesh"
+export PATH="$PATH:/opt/myapp/bin"
+export TERM=linux
+
 ### .bashrc vs .bash_profile vs .profile
 
 The main difference is *when* they are executed, depending on login shell vs. interactive non-login shell.
@@ -390,6 +416,16 @@ echo "bashrc loaded" >> ~/.bashrc
 echo "bash_profile loaded" >> ~/.bash_profile
 # open a new terminal and see which message(s) print
 ```
+
+### stty — Control Terminal Settings
+
+`stty` is used to display or modify terminal line settings and terminal characteristics.
+
+```bash
+stty size              # Show terminal rows and columns
+stty rows 5            # Set terminal height to 5 rows
+stty columns 80        # Set terminal width to 80 columns
+stty -a                # Show all current terminal settings
 
 ### Getting Unstuck
 When a command or program seems frozen or you're dropped into an unfamiliar screen:
@@ -484,6 +520,28 @@ less server.log
 ```
 Navigation: `Up`/`Down` arrows, `Space`/`Page Down`, `Page Up`, `/` search, `q` quit.
 > Why use `less`? Large log files — doesn't load the whole file into memory.
+
+### more — Page Through Files
+
+`more` is a pager that displays text one screen at a time.
+
+```bash
+more filename.txt
+```
+Useful keyboard commands:
+Space       → Next page
+Enter       → Next line
+b           → Previous page (on supported versions)
+q           → Quit
+v           → Open the current file in an editor
+
+| Feature              | `more`                    | `less` |
+| -------------------- | ------------------------- | ------ |
+| Page through files   | Yes                       | Yes    |
+| Search               | Limited                   | Yes    |
+| Move backward        | Limited/version-dependent | Yes    |
+| Large log files      | Yes                       | Yes    |
+| Common modern choice | Less common               | `less` |
 
 ### diff — Compare Files
 
