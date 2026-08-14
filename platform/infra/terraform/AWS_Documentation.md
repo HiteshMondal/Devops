@@ -3,39 +3,124 @@
 
 ---
 
-## Table of Contents
-
-1. AWS & Cloud Computing Fundamentals
-2. AWS Global Infrastructure
-3. IAM (Identity and Access Management)
-4. VPC & Networking
-5. EKS (Elastic Kubernetes Service)
-6. RDS (Relational Database Service)
-7. KMS (Key Management Service)
-8. Secrets Manager vs Parameter Store
-9. CloudWatch (Monitoring & Logging)
-10. S3, Compute & Other Core Services
-11. Load Balancing (ALB/NLB) & Ingress
-12. Security & Well-Architected Framework
-13. Cost Optimization & Free Tier
-14. Scenario-Based Interview Questions
-15. Serverless & Event-Driven Services
-16. Content Delivery, DNS & Global Services
-17. Disaster Recovery, Backup & Compliance
-18. Additional Rapid-Fire Interview Questions
-19. Billing, Cost Visibility & Support (Beginner Essentials)
-20. Elastic Beanstalk
-21. AWS CloudFormation
-22. Amazon Elastic File System (EFS)
-23. Amazon FSx
-24. AWS WAF & Shield
-25. AWS CodePipeline
-26. AWS CodeBuild
-27. AWS CodeDeploy
-
----
-
 ## AWS & Cloud Computing Fundamentals
+
+## Absolute Basics — Before Cloud Computing Makes Sense
+
+### What is a server, and what is a client?
+
+A **server** is just a computer whose job is to sit there and respond to requests — serve a
+webpage, return data from a database, process a payment. A **client** is whatever is asking
+(a browser, a mobile app, another server). "The cloud" is simply someone else's servers
+(AWS's, in this case) that you rent instead of buying and running yourself.
+
+### What is a network, and what is "the internet"?
+
+A network is any group of computers that can talk to each other. The internet is the
+global network of networks — computers everywhere agreeing to use the same addressing
+system (IP addresses) and rules (protocols) so any two of them can exchange data.
+
+### What is an API?
+
+An API (Application Programming Interface) is a defined way for one piece of software to
+ask another piece of software to do something, without needing to know how it works
+internally — just what to send and what you'll get back. Every single interaction with AWS
+(Console clicks, CLI commands, Terraform, the AWS SDK) is really just a call to the **AWS
+API** underneath. Kubernetes works the same way: `kubectl` talks to the **Kubernetes API
+server**.
+
+### What is HTTP/HTTPS, and what is a "request" and "response"?
+
+HTTP (HyperText Transfer Protocol) is the standard way clients and servers talk to each
+other over the internet. A **request** asks for something ("GET me this webpage," "POST
+this form data"); a **response** is what comes back, including a **status code** — a
+3-digit number summarizing what happened:
+
+- `200` — success
+- `301`/`302` — redirect
+- `400` — bad request (client's fault)
+- `401`/`403` — not authenticated / not authorized
+- `404` — not found
+- `500` — server error
+
+**HTTPS** is HTTP encrypted with TLS/SSL, so the request/response can't be read or tampered
+with in transit. This matters constantly later (ALB "terminates TLS," `rds.force_ssl`,
+CloudFront HTTPS).
+
+### What is JSON, and what is YAML?
+
+Both are just text formats for representing structured data (not code). IAM policies,
+Terraform's underlying state, and many AWS API responses use **JSON**:
+
+```json
+{ "name": "Alice", "role": "admin", "active": true }
+```
+
+Kubernetes manifests and many config files use **YAML** — the same kind of data, less
+punctuation, indentation-based:
+
+```yaml
+name: Alice
+role: admin
+active: true
+```
+
+You'll see both throughout this guide (IAM policy JSON, Kubernetes YAML manifests) — if
+you've never read either before, that's the one thing to practice first.
+
+### What is encryption, in plain terms?
+
+Encryption scrambles data using a **key** so that only someone with the correct key can
+unscramble ("decrypt") it back to the original. **Encryption at rest** protects stored
+data (on disk); **encryption in transit** protects data while it's moving across a network.
+Both come up repeatedly later (KMS, RDS `storage_encrypted`, `rds.force_ssl`).
+
+### What does "provisioning" mean?
+
+Provisioning just means "creating and setting up a resource so it's ready to use" —
+e.g., "provisioning an EC2 instance" means AWS allocating the actual virtual machine and
+handing it to you. You'll see this word constantly in AWS docs.
+
+### What is an "endpoint"?
+
+An endpoint is the URL/address you send a request to in order to talk to a specific AWS
+service — e.g., `s3.ap-south-1.amazonaws.com`. Every AWS service has its own endpoint per
+region. When you use the Console/CLI/SDK, they're just building requests to these endpoints
+for you behind the scenes.
+
+### What does "Elastic" mean in names like EC2, Elastic Load Balancing, Elastic IP?
+
+In AWS naming, "Elastic" signals that the resource can grow, shrink, or be reassigned
+on demand rather than being fixed — e.g., an Elastic IP can be moved between instances,
+Elastic Load Balancing can scale its own capacity, EC2 capacity can be scaled up/down.
+
+### What is a Region code, and how do you read one (e.g., `ap-south-1`, `us-east-1`)?
+
+The format is `<continent>-<direction>-<number>`: `ap-south-1` = Asia Pacific, South,
+first region built there (Mumbai). `us-east-1` = US, East, first region (N. Virginia).
+The number increments as AWS adds more regions in that geography. Knowing this helps you
+recognize/guess region codes without memorizing a lookup table.
+
+### What is the difference between a Global, Regional, and Zonal (AZ-scoped) resource?
+
+- **Global** — exists once across all of AWS, not tied to any region (IAM, Route 53, CloudFront, S3 bucket *names* are globally unique).
+- **Regional** — exists within one region but usable across all AZs in it (a VPC, an RDS instance, most services).
+- **Zonal** — tied to one specific Availability Zone (an EBS volume, a subnet).
+
+This matters because you can't attach a zonal resource (EBS volume) to something in a
+different AZ, and you can't reference a regional resource (VPC) from a different region.
+
+| Acronym | Meaning |
+|---|---|
+| ARN  | Amazon Resource Name — the unique ID string for any AWS resource |
+| ENI  | Elastic Network Interface — a virtual network card attached to an instance |
+| ASG  | Auto Scaling Group — a group of EC2 instances managed as one scalable unit |
+| SLA  | Service Level Agreement — AWS's uptime/performance guarantee |
+| CMK  | Customer Master Key — a KMS encryption key you own and control |
+| OIDC | OpenID Connect — an identity/authentication protocol built on OAuth2 |
+| JWT  | JSON Web Token — a signed token used to prove identity between systems |
+| HA   | High Availability — designed to keep running through failures |
+| IaC  | Infrastructure as Code — defining infrastructure in text files instead of clicking in a console |
 
 ### What is cloud computing, and what are the three service models (IaaS, PaaS, SaaS)?
 
@@ -46,6 +131,26 @@ Cloud computing delivers compute, storage, and other IT resources over the inter
 - **SaaS (Software as a Service)** — a fully finished application you just use (e.g., AWS WorkMail, Amazon Chime).
 
 EKS and RDS in this project sit closer to the "managed" end — AWS runs the control plane/DB engine, you manage configuration and workloads on top.
+
+### What problem does cloud computing actually solve, compared to on-premises servers?
+
+Before cloud computing, a company had to buy physical servers, guess capacity years in
+advance, install them in a data center it owned or rented, and pay full price whether the
+servers were busy or idle. This is a large **CAPEX (capital expenditure)** — cash spent
+upfront on hardware that depreciates over time.
+
+Cloud computing turns this into **OPEX (operational expenditure)** — you rent compute,
+storage, and networking by the hour/second, scale up or down within minutes, and stop
+paying the moment you stop using a resource. The trade-off is that you're paying a premium
+for that flexibility compared to owning hardware outright at large, predictable scale.
+
+### What are "elasticity" and "scalability," and how do they differ?
+
+- **Scalability** — the ability to handle more load by adding resources (more servers,
+  bigger servers). This can be manual.
+- **Elasticity** — scalability that happens *automatically* in response to real-time
+  demand, and scales back down automatically when demand drops (e.g., Auto Scaling Groups,
+  Lambda). Elasticity is what makes "pay only for what you use" actually true in practice.
 
 ### What is the AWS pricing model, and what is the Free Tier?
 
@@ -63,9 +168,52 @@ AWS bills **pay-as-you-go** — no upfront commitment, billed per hour/second/re
 
 This project uses Terraform (which itself calls the AWS API under the hood) rather than the Console or CLI directly — a fourth, IaC-based way to reach the same APIs.
 
+### How do you actually set up the AWS CLI for the first time?
+
+1. Install the CLI (`brew install awscli`, or the AWS-provided installer for Linux/Windows).
+2. Run `aws configure`.
+3. It prompts for: **Access Key ID**, **Secret Access Key**, **default region**
+   (e.g., `ap-south-1`), and **default output format** (usually `json`).
+4. These are saved to `~/.aws/credentials` and `~/.aws/config` and used automatically by
+   the CLI, SDKs, and tools like Terraform.
+
+⚠️ Never generate long-lived access keys for your root user, and never commit
+`~/.aws/credentials` to Git.
+
+### What is the AWS Console "region selector," and why do beginners get tripped up by it?
+
+The Console shows a region dropdown in the top-right. Almost everything you create is
+scoped to whatever region is currently selected — if you create an EC2 instance in
+`us-east-1`, then switch the dropdown to `ap-south-1`, that instance appears to
+"disappear" (it's just not shown, because you're now looking at a different region).
+This is the single most common beginner confusion ("where did my server go?").
+
 ---
 
 ## AWS Global Infrastructure
+
+## Creating Your First AWS Account (Absolute Beginner Steps)
+
+### What do you actually need to sign up for AWS?
+
+An email address, a credit/debit card (used for identity verification even on Free Tier —
+you won't be charged unless you exceed free limits), and a phone number for verification.
+
+### What happens immediately after account creation, before you touch any service?
+
+1. You start as the **root user** — full, unrestricted access tied to the sign-up email.
+2. AWS immediately starts the 12-month Free Tier clock from account creation date, not
+   from first resource use.
+3. No resources exist yet — an empty account has a Default VPC per region, and nothing
+   else running (and therefore nothing being billed) until you create something.
+
+### What's the very first thing a new user should click through, and why in this order?
+
+Root MFA → create an IAM identity for yourself → set a Budget alert → pick a home region
+→ configure the CLI. This order matters because each step reduces a specific real risk:
+an unsecured root account, using root for daily work, an unnoticed bill, resources
+scattered across the wrong region, and unauthenticated CLI/Terraform calls, respectively.
+(Full detail on each already exists later in this doc under IAM and Billing.)
 
 ### Explain the difference between an AWS Region, Availability Zone (AZ), and Edge Location.
 
@@ -96,6 +244,14 @@ IAM allows you to create and manage users, groups, roles, and policies to define
 - **IAM Roles** — temporary permissions assumed by AWS services or users, often used for service-to-service communication.
 - **IAM Policies** — JSON documents defining what actions identities can perform on which resources.
 
+### What does "authentication" vs "authorization" actually mean, with a real-world analogy?
+
+**Authentication** = proving who you are (showing ID at a building's front desk).
+**Authorization** = what you're allowed to do once inside (which floors your badge opens).
+AWS separates these cleanly: you authenticate once (password + MFA, or an access key), and
+then every single action you take is separately checked against your permissions
+(authorization) — even if you're already "logged in."
+
 ### What is the difference between an IAM Role and an IAM User?
 
 An **IAM User** represents a permanent identity (a person or a service) with long-lived credentials (access key + secret key). An **IAM Role** is an identity with temporary credentials that can be *assumed* by a trusted principal (an EC2 instance, an EKS pod, another AWS account, or an external identity provider). Roles are strongly preferred for workloads because credentials automatically rotate and are never stored on disk.
@@ -109,6 +265,30 @@ The **root user** is created with the AWS account itself and has unrestricted ac
 ### What is MFA, and where should it be applied?
 
 Multi-Factor Authentication requires a second proof of identity (a virtual MFA app like Google Authenticator, a hardware token, etc.) in addition to a password. It should be enabled on the root user without exception, and enforced via IAM policy/password policy for human IAM users — especially anyone with console access to production resources.
+
+### In one sentence, what does IAM actually do?
+
+IAM answers two questions for every request made to AWS: **"who are you?"**
+(authentication) and **"what are you allowed to do?"** (authorization).
+
+### What is a "principal"?
+
+A principal is anything that can make a request to AWS — an IAM user, an IAM role, or an
+AWS service acting on your behalf. Every action in AWS is performed by some principal.
+
+### What is an Access Key and Secret Key, and why are they risky?
+
+An IAM User can generate an **Access Key ID + Secret Access Key** pair — a long-lived
+credential used to authenticate CLI/SDK calls. If leaked (e.g., accidentally committed to
+GitHub), anyone can use them until manually revoked. This is exactly why IAM Roles
+(temporary, auto-expiring credentials) are preferred over IAM Users with long-lived keys
+for anything automated — see "IAM Role vs IAM User" later in this section.
+
+### What does "authorized" actually mean when a policy is evaluated?
+
+By default, everything is denied. A request is only allowed if some attached policy has an
+explicit `"Effect": "Allow"` matching the action/resource — and it's blocked entirely if any
+policy has an explicit `"Effect": "Deny"`, which always overrides any Allow.
 
 ### What is IRSA (IAM Roles for Service Accounts) and why does it matter for EKS?
 
@@ -163,6 +343,88 @@ The `aws_lbc` IAM policy is scoped extremely narrowly — the `elasticloadbalanc
 
 Amazon Virtual Private Cloud (VPC) lets you provision a logically isolated section of the AWS cloud where you launch resources in a virtual network that you define. It gives you full control over IP addresses, subnets, route tables, and network gateways.
 
+### What is an IP address, and what's the difference between public and private?
+
+An IP address is a numeric label identifying a device on a network (e.g., `192.168.1.5`).
+A **private IP** is only reachable from within its own local network (like a home Wi-Fi
+network or a VPC) and is reused across millions of different private networks. A **public
+IP** is globally unique and reachable from the internet. Most AWS resources (EC2, RDS) get
+a private IP by default; a public IP or Elastic IP must be explicitly attached for internet
+reachability.
+
+### What is a port, and why does it matter for security groups?
+
+An IP address identifies *which machine*; a port number identifies *which application or
+service on that machine*. Common ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 5432 (PostgreSQL),
+3306 (MySQL). Security group rules are always "IP/source + port" pairs — e.g., "allow port
+5432 only from the app server's security group."
+
+### What is DNS, in plain terms?
+
+DNS (Domain Name System) translates human-readable names (`example.com`) into IP addresses
+that computers actually use to route traffic. Route 53 is AWS's DNS service.
+
+### What are the OSI/network layers referenced later as "Layer 3," "Layer 4," "Layer 7"?
+
+A simplified model of how network communication is layered:
+- **Layer 3 (Network)** — IP addressing and routing (how packets find their way across networks).
+- **Layer 4 (Transport)** — TCP/UDP; ports, connection reliability.
+- **Layer 7 (Application)** — HTTP, HTTPS, DNS; what humans/applications actually interact with.
+
+This matters later because NLB operates at Layer 4 (routes raw TCP/UDP by IP+port) while ALB
+operates at Layer 7 (can read URLs, headers, and route by content).
+
+### What is a firewall, at a basic level?
+
+A firewall is a set of rules that decides what network traffic is allowed in or out.
+Security Groups and NACLs (covered later in this doc) are AWS's two firewall mechanisms.
+
+### What is TCP vs UDP, in plain terms?
+
+**TCP** is a connection-oriented protocol — it guarantees delivery and correct order
+(used for HTTP, SSH, database connections). **UDP** is connectionless and doesn't guarantee
+delivery or order, but is faster/lower-overhead (used for DNS lookups, video streaming,
+gaming). Security group and NACL rules let you specify which protocol a rule applies to.
+
+### What is an Elastic IP?
+
+A static, public IPv4 address you can allocate to your account and attach to an EC2
+instance or NAT Gateway. Unlike a normal public IP (which changes if you stop/start an
+instance), an Elastic IP stays the same until you explicitly release it — useful when
+something external needs to whitelist a fixed IP. AWS charges a small hourly fee for
+Elastic IPs that are allocated but **not** attached to a running resource (to discourage
+hoarding scarce IPv4 addresses).
+
+### What is a Bastion Host?
+
+A small, hardened EC2 instance placed in a public subnet, used purely as a secure "jump
+box" — you SSH into the bastion first, then SSH from the bastion into private-subnet
+instances that have no direct internet exposure. This project's design replaces this
+pattern with **SSM Session Manager** (covered later), which avoids the bastion entirely.
+
+### What is horizontal scaling vs. vertical scaling?
+
+**Vertical scaling** ("scale up") means making one server bigger — more CPU/RAM on the
+same machine. It's simple but has a hard ceiling (there's a biggest instance size) and
+usually requires downtime to resize. **Horizontal scaling** ("scale out") means adding
+more servers to share the load instead. It has no real ceiling and can happen without
+downtime, but requires something to distribute traffic across the servers — which is
+exactly what a load balancer does (covered later in this guide).
+
+### What is a load balancer, at the most basic level?
+
+A load balancer sits in front of multiple servers and distributes incoming traffic across
+them, so no single server gets overwhelmed, and if one server fails, traffic is
+automatically routed to the healthy ones instead. This is the basic idea behind every
+AWS load balancer type (ALB, NLB, Classic) covered in detail later in this guide.
+
+### What is a health check?
+
+A small, repeated request (e.g., "GET /health every 10 seconds") that a load balancer or
+orchestrator (like Kubernetes) sends to a server to confirm it's still working correctly.
+If a server fails enough consecutive health checks, it's automatically removed from
+rotation until it recovers.
+
 ### What is a VPC, and what are its core building blocks?
 
 A VPC (Virtual Private Cloud) is your own logically isolated network within AWS where you control the IP range, subnets, route tables, and gateways. Core building blocks:
@@ -173,6 +435,23 @@ A VPC (Virtual Private Cloud) is your own logically isolated network within AWS 
 - **NAT Gateway** — lets private subnets reach OUT to the internet only.
 
 Every AWS account gets one Default VPC per region automatically, pre-configured with public subnets in every AZ.
+
+### What is EC2, and what do you actually need to launch an instance?
+
+EC2 (Elastic Compute Cloud) is AWS's virtual machine service. To launch one, you choose:
+1. An **AMI** (the OS/software image to boot from — see below).
+2. An **instance type** (how much CPU/RAM/network — e.g., `t3.micro`).
+3. A **key pair** (a public/private SSH key used to log in securely — AWS stores the
+   public half, you keep the private half; it's never recoverable if lost).
+4. A **VPC and subnet** (which network it lives in — public subnet = internet-reachable).
+5. A **security group** (the firewall rules controlling what traffic can reach it).
+
+### What is SSH, and why is it used to access EC2 instances?
+
+SSH (Secure Shell) is an encrypted protocol for remotely logging into and running commands
+on another machine. `ssh -i mykey.pem ec2-user@<public-ip>` is the classic way to access an
+EC2 instance — though this project prefers SSM Session Manager instead, which avoids
+needing an open port 22 at all (see the SSM section later in this doc).
 
 ### What is an AMI (Amazon Machine Image)?
 
@@ -200,6 +479,31 @@ Beyond the EKS-specific discovery tags covered later, a basic tagging convention
 - **Savings Plans** — similar discount to RIs but flexible across instance families/regions.
 - **Spot Instances** — bid on unused AWS capacity for up to 90% off; AWS can reclaim with a 2-minute warning — only for fault-tolerant/stateless workloads.
 - **Dedicated Hosts/Instances** — physical server dedicated to you; needed for licensing (e.g., BYOL Windows Server) or compliance requirements.
+
+### What are the main EBS volume types, and when do you pick each?
+
+| Type | Best for | Notes |
+|---|---|---|
+| **gp3** (General Purpose SSD) | Default choice for most workloads | Baseline 3,000 IOPS / 125 MB/s, can add more independently of size |
+| **gp2** (older General Purpose SSD) | Legacy default | IOPS scales with volume size (3 IOPS/GB) |
+| **io1 / io2** (Provisioned IOPS SSD) | Databases needing consistent high IOPS | Most expensive, most predictable performance |
+| **st1** (Throughput Optimized HDD) | Big sequential workloads (log processing) | Cannot be a boot volume |
+| **sc1** (Cold HDD) | Rarely accessed data, lowest cost | Cannot be a boot volume |
+
+### What is the difference between "stopping," "terminating," and "rebooting" an EC2 instance?
+
+- **Reboot** — OS restarts, instance keeps its IP/EBS volumes, billing continues.
+- **Stop** — instance shuts down, EBS-backed data is preserved, you stop paying for compute
+  (but still pay for attached EBS storage); public IP is released unless it's an Elastic IP.
+- **Terminate** — instance is permanently deleted; by default the root EBS volume is
+  deleted too (`delete_on_termination`), unless configured otherwise.
+
+### What is an Instance Profile?
+
+The actual mechanism that lets an EC2 instance "have" an IAM role — you can't attach an
+IAM role directly to an instance; AWS wraps it in an Instance Profile container first
+(Terraform/Console usually do this step for you automatically, which is why it's easy to
+forget it exists).
 
 ### CIDR — Classless Inter-Domain Routing
 
@@ -295,6 +599,72 @@ An **Internet Gateway (IGW)** is a horizontally scaled, redundant VPC component 
 
 ## EKS (Elastic Kubernetes Service)
 
+### What is a container, in plain terms?
+
+A container packages an application with everything it needs to run (code, runtime,
+libraries, config) into a single, portable unit that runs the same way anywhere — a
+laptop, a CI server, or an AWS EC2 instance. Docker is the most common tool for building
+and running containers. Unlike a virtual machine, a container shares the host machine's OS
+kernel, which makes it much lighter and faster to start.
+
+### What is a container image vs. a running container?
+
+An **image** is the packaged, read-only blueprint (built once, stored in a registry like
+ECR). A **container** is a running instance of that image — the same relationship as a
+class and an object, or a recipe and a cooked meal.
+
+### What is Kubernetes, and what problem does it solve?
+
+Once you have many containers running across many machines, you need something to decide
+which machine runs which container, restart it if it crashes, route traffic to it, and
+scale it up or down. Kubernetes is that orchestration system. EKS is simply "Kubernetes,
+with AWS running and maintaining the hardest parts (the control plane) for you."
+
+### What are the core Kubernetes building blocks referenced later in this doc?
+
+- **Pod** — the smallest deployable unit; one or more containers that share networking/storage.
+- **Node** — a physical or virtual machine that runs pods (in EKS, an EC2 instance or Fargate).
+- **Deployment** — declares how many replicas of a pod should run and handles rolling updates.
+- **Service** — a stable network endpoint that routes traffic to a changing set of pod IPs.
+- **Ingress** — routes external HTTP(S) traffic into the cluster, based on host/path rules
+  (this is what the AWS Load Balancer Controller watches, discussed later).
+- **ServiceAccount** — a Kubernetes identity that pods use to authenticate to the Kubernetes
+  API — and, via IRSA, to AWS APIs too.
+- **Namespace** — a way to logically divide a single cluster into isolated groups of
+  resources (e.g., `dev`, `staging`, `kube-system`).
+
+### What is a StatefulSet, and how is it different from a Deployment?
+
+A **Deployment** manages identical, interchangeable pod replicas — any replica can be
+killed and replaced with a fresh one with a new name/IP, which is fine for stateless apps.
+A **StatefulSet** is used when pods need a stable identity (predictable name, stable
+storage that follows the pod) — e.g., running a database cluster inside Kubernetes, where
+"which specific replica this is" matters.
+
+### What is a ConfigMap, and how is it different from a Secret?
+
+Both store configuration data that pods can read (as environment variables or mounted
+files). A **ConfigMap** is for non-sensitive config (feature flags, URLs). A **Secret** is
+for sensitive data (passwords, tokens) — structurally almost identical, but Kubernetes
+treats Secrets slightly differently (e.g., not shown in plain text in `kubectl get`), and
+Secrets are what benefit from the etcd `encryption_config` covered later in this doc.
+Neither is encrypted by default without extra configuration — this is a common beginner
+misconception.
+
+### What is Horizontal Pod Autoscaler (HPA), and how is it different from the Cluster Autoscaler covered later?
+
+**HPA** scales the *number of pod replicas* for a Deployment up/down based on CPU/memory/
+custom metrics — it operates entirely inside the cluster and has no idea whether there's
+enough physical node capacity to fit the new pods. The **Cluster Autoscaler** (covered in
+depth later in this doc) is the one that adds/removes actual EC2 nodes when pods can't be
+scheduled. In production, the two normally work together: HPA decides "we need more pods,"
+Cluster Autoscaler makes sure there's room to run them.
+
+### What is `kubectl`?
+
+The command-line tool used to interact with any Kubernetes cluster's API server — the
+Kubernetes equivalent of the AWS CLI.
+
 ### What are the two IAM roles required for an EKS cluster, and what does each do?
 
 1. **Cluster role** (assumed by `eks.amazonaws.com`) — attached with `AmazonEKSClusterPolicy` and `AmazonEKSVPCResourceController`, allowing the managed control plane to create/manage ENIs, security groups, and load balancer resources on the customer's behalf.
@@ -379,6 +749,22 @@ Kubernetes RBAC (`Role`, `ClusterRole`, `RoleBinding`) controls **what an alread
 ## RDS (Relational Database Service)
 
 Supported databases: MySQL, PostgreSQL, Oracle, SQL Server, MariaDB, and Aurora.
+
+### What is a relational database, and what does "relational" mean?
+
+A relational database stores data in tables made of rows and columns (like a spreadsheet),
+where tables can be linked ("related") to each other via shared keys — e.g., an `orders`
+table referencing a `customer_id` that exists in a `customers` table. **SQL (Structured
+Query Language)** is the standard language used to read and write this data. RDS is AWS's
+managed service for running relational database engines (PostgreSQL, MySQL, etc.) without
+you having to install, patch, or back them up manually.
+
+### What is the difference between a relational (SQL) and non-relational (NoSQL) database?
+
+Relational databases (RDS) enforce a fixed schema and strong consistency, and excel at
+complex queries joining multiple tables. NoSQL databases (like DynamoDB, covered later)
+trade some of that structure/consistency for massive horizontal scalability and flexible,
+schema-less data — better suited to huge volumes of simple key-value or document lookups.
 
 ### Why is `storage_encrypted = true` considered a baseline security requirement, and what does it actually protect against?
 
@@ -495,6 +881,16 @@ Amazon S3 (Simple Storage Service) is object storage — you store files ("objec
 - **S3 Intelligent-Tiering** — automatically moves objects between access tiers based on usage patterns; ideal when access patterns are unpredictable.
 - **S3 Standard-IA / One Zone-IA** — infrequently accessed data with a retrieval fee; One Zone trades AZ redundancy for lower cost.
 - **S3 Glacier Instant/Flexible/Deep Archive** — archival storage, from millisecond to 12-hour retrieval times, at dramatically lower storage cost — used for compliance retention, backups, and cold data.
+
+### What does "S3 is 99.999999999% durable" (11 nines) actually mean, and how is that different from availability?
+
+**Durability** is the probability your data is *not lost* — 11 nines means if you stored
+10 million objects, you'd statistically expect to lose one object roughly every 10,000
+years. AWS achieves this by automatically replicating every object across multiple
+devices in multiple AZs. **Availability** (typically 99.9%–99.99% depending on storage
+class) is a *different* number — it's the probability the data is *reachable right now*
+when you ask for it. You can have perfectly durable data that's briefly unavailable during
+an outage, without ever actually being lost.
 
 ### What is the difference between EC2, ECS, EKS, and Lambda as compute options?
 
@@ -699,6 +1095,19 @@ Three things to set up on day one, before touching any other service:
 - **Business** — paid; 24/7 phone/chat/email, faster response SLAs, Trusted Advisor full checks.
 - **Enterprise (On-Ramp/Enterprise)** — paid; a named Technical Account Manager (TAM), fastest SLAs, architectural guidance — aimed at production-critical workloads.
 
+### What should you do in the first 10 minutes of a new AWS account, before creating anything?
+
+1. Enable **MFA on the root user** immediately (covered later in the IAM section).
+2. Create an **IAM Identity Center user or IAM user** for yourself — stop using root for
+   anything except account-level tasks.
+3. Set a **Billing/Budget alert** (e.g., $5) so you're emailed before an unexpected charge
+   grows.
+4. Pick your **home Region** (e.g., `ap-south-1`) — most resources are region-scoped, and
+   accidentally creating things in the default `us-east-1` while working in another region
+   is a common beginner mistake.
+5. Install and configure the **AWS CLI** (`aws configure`) if you'll be scripting or using
+   Terraform, which authenticates via the CLI's credentials under the hood.
+
 ---
 
 ## Elastic Beanstalk
@@ -740,6 +1149,50 @@ AWS CloudFormation is AWS's native Infrastructure-as-Code service — you define
 ### What is the difference between CloudFormation and Terraform?
 
 CloudFormation is AWS-only, free to use, and natively understands rollback-on-failure and drift detection against AWS's own state. Terraform is multi-cloud (AWS, Azure, GCP, Kubernetes, etc. in one tool), uses HCL instead of JSON/YAML, and manages its own state file (which must be stored/secured separately, e.g., in S3). This project uses Terraform specifically for that portability and its more readable syntax.
+
+### What is Infrastructure as Code (IaC), and why not just click around in the AWS Console?
+
+IaC means describing your infrastructure (servers, networks, permissions) in text files
+instead of manually clicking through the AWS Console. Benefits: it's version-controlled
+(you can see exactly what changed and when, in Git), repeatable (spin up an identical
+environment for staging/prod), and reviewable (a teammate can read a pull request before
+infrastructure changes go live) — instead of undocumented, one-off manual changes that are
+hard to reproduce or audit.
+
+### What is a Terraform "state file," in plain terms?
+
+Terraform needs to remember what it already created, so it doesn't try to create the same
+resource twice or lose track of it. The **state file** (`terraform.tfstate`) is Terraform's
+record of "here's what I've built and its current settings." This is why losing the state
+file is a real problem (see the disaster-recovery scenario question later in this doc) —
+Terraform stops knowing what already exists.
+
+### What do `terraform plan` and `terraform apply` actually do?
+
+`terraform plan` compares your code to the current state and shows what *would* change,
+without making any changes — a dry run. `terraform apply` actually executes those changes
+against real AWS resources.### What is Infrastructure as Code (IaC), and why not just click around in the AWS Console?
+
+IaC means describing your infrastructure (servers, networks, permissions) in text files
+instead of manually clicking through the AWS Console. Benefits: it's version-controlled
+(you can see exactly what changed and when, in Git), repeatable (spin up an identical
+environment for staging/prod), and reviewable (a teammate can read a pull request before
+infrastructure changes go live) — instead of undocumented, one-off manual changes that are
+hard to reproduce or audit.
+
+### What is a Terraform "state file," in plain terms?
+
+Terraform needs to remember what it already created, so it doesn't try to create the same
+resource twice or lose track of it. The **state file** (`terraform.tfstate`) is Terraform's
+record of "here's what I've built and its current settings." This is why losing the state
+file is a real problem (see the disaster-recovery scenario question later in this doc) —
+Terraform stops knowing what already exists.
+
+### What do `terraform plan` and `terraform apply` actually do?
+
+`terraform plan` compares your code to the current state and shows what *would* change,
+without making any changes — a dry run. `terraform apply` actually executes those changes
+against real AWS resources.
 
 ---
 
