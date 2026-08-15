@@ -1,11 +1,8 @@
 # AWS — Complete Interview Guide
-### Services, Concepts & Interview Questions (Based on Production EKS + RDS Architecture)
 
 ---
 
 ## AWS & Cloud Computing Fundamentals
-
-## Absolute Basics — Before Cloud Computing Makes Sense
 
 ### What is a server, and what is a client?
 
@@ -147,6 +144,15 @@ and set up encryption for the session. In AWS, **ACM (AWS Certificate Manager)**
 auto-renews these certificates for free, and they're commonly attached to an ALB or
 CloudFront distribution to enable HTTPS — this is the piece that was missing context
 earlier when this guide mentions "ALB terminates TLS."
+
+### What is AWS Certificate Manager (ACM)?
+
+ACM issues, stores, and auto-renews free public TLS/SSL certificates for use with AWS
+services like an ALB or CloudFront — you never see the private key or handle manual
+renewal. It cannot be used to secure a certificate for software running outside AWS-managed
+endpoints (e.g., you can't export the private key to install on your own EC2 web server
+config directly). Certificates for CloudFront must specifically be requested in
+`us-east-1`, regardless of where your other resources live.
 
 ### What is caching, and why does it make things faster?
 
@@ -417,6 +423,13 @@ GitHub), anyone can use them until manually revoked. This is exactly why IAM Rol
 (temporary, auto-expiring credentials) are preferred over IAM Users with long-lived keys
 for anything automated — see "IAM Role vs IAM User" later in this section.
 
+### What is IAM Access Analyzer?
+
+Access Analyzer scans resource policies (S3 buckets, IAM roles, KMS keys, etc.) and flags
+any that grant access to an external entity (another account, the public internet) that
+you likely didn't intend — surfacing unintended cross-account or public exposure before
+it's exploited, rather than after.
+
 ### What does "authorized" actually mean when a policy is evaluated?
 
 By default, everything is denied. A request is only allowed if some attached policy has an
@@ -477,6 +490,19 @@ EKS) — it is not meant for your application's end users. **Amazon Cognito** is
 service for that: it handles user sign-up/sign-in, password resets, and social/enterprise
 login (Google, SAML, etc.) for your own application's customers, issuing JWT tokens your
 app can verify — a completely separate concern from AWS account access.
+
+---
+
+## Amazon Cognito
+
+### What are Cognito User Pools vs Identity Pools?
+
+A **User Pool** is a managed user directory for your application — handles sign-up,
+sign-in, password reset, MFA, and social/enterprise login, and issues JWT tokens on
+successful login. An **Identity Pool** takes a token from a User Pool (or another IdP) and
+exchanges it for temporary, scoped **AWS credentials** — used when your app's end users
+need direct, limited access to AWS resources (e.g., a mobile app uploading directly to a
+user-specific S3 folder) rather than going through your backend.
 
 ---
 
@@ -585,6 +611,15 @@ Gateway** connects a VPC to the public internet, a **NAT Gateway** lets private 
 reach out to the internet without being reachable from it, and a **Transit Gateway**
 (not covered in depth here) connects many VPCs together.
 
+### What is an ENI (Elastic Network Interface)?
+
+An ENI is a virtual network card — it has its own private IP, MAC address, and security
+groups, and it's the actual object that "attaches" a resource to a subnet. An EC2 instance
+always has at least one ENI (its primary network interface); Lambda functions in a VPC and
+EKS pods (via VPC CNI) also get ENIs behind the scenes. Understanding this explains why
+"each pod gets a real VPC IP" (mentioned under VPC CNI) is possible — the CNI plugin is
+assigning secondary IPs from ENIs attached to the node.
+
 ### What is VPC Peering?
 
 A private, direct network connection between two VPCs (in the same or different AWS
@@ -592,6 +627,14 @@ accounts/regions) that lets resources in each communicate using private IPs, as 
 were on the same network — without traversing the public internet. It's non-transitive
 (if VPC A peers with B, and B peers with C, A cannot reach C through B) — which is exactly
 the limitation a **Transit Gateway** solves once you need many VPCs interconnected.
+
+### What is a Transit Gateway, and how does it solve VPC Peering's non-transitive limitation?
+
+A Transit Gateway acts as a central hub that many VPCs (and on-prem networks via VPN/
+Direct Connect) connect to individually, instead of each pair needing its own peering
+connection. Unlike peering, it's transitive — any attached VPC can reach any other
+attached VPC through the hub — turning what would be an unmanageable N² mesh of peering
+connections into a single hub-and-spoke design once you have more than a handful of VPCs.
 
 ### What is a VPC, and what are its core building blocks?
 
@@ -628,6 +671,14 @@ needing an open port 22 at all (see the SSM section later in this doc).
 
 An Amazon Machine Image (AMI) is a pre-configured template containing the operating system, applications, and storage settings required to launch a virtual server (EC2 instance) in AWS. It acts as a reusable blueprint, allowing you to quickly clone and scale identical environments.
 
+### What is EC2 User Data, and when does it run?
+
+User Data is a script (bash, or cloud-init YAML) you attach to an instance at launch time,
+which runs automatically once on first boot — commonly used to install packages, pull config,
+or auto-join a cluster (e.g., EKS node bootstrap scripts) without building a fully custom AMI
+for every change. It's plain text, not encrypted by default, so it should never contain
+secrets directly — pull those from Secrets Manager/Parameter Store instead.
+
 ### What are EC2 instance families, and how do you choose one?
 
 Instance types are grouped into families optimized for different workloads:
@@ -658,6 +709,15 @@ A group of EC2 instances AWS manages together as one unit. You set a **min**, **
 reach the desired count, replaces any that fail health checks, and can scale the count up
 or down automatically based on demand (CPU load, queue length, a schedule, etc.).
 
+### What are the three types of Auto Scaling policies?
+
+- **Target Tracking** — you pick a metric and target (e.g., "keep average CPU at 50%");
+  AWS manages the add/remove math automatically. Simplest and most common.
+- **Step Scaling** — you define specific scaling steps based on how far a metric is
+  outside a threshold (e.g., +2 instances if CPU > 80%, +4 if CPU > 90%).
+- **Scheduled Scaling** — scale based on a known time pattern (e.g., scale up every
+  weekday at 9am) rather than reacting to a live metric.
+  
 ### What are the EC2 purchasing options?
 
 - **On-Demand** — pay per second/hour, no commitment; most expensive per-hour.
@@ -665,6 +725,15 @@ or down automatically based on demand (CPU load, queue length, a schedule, etc.)
 - **Savings Plans** — similar discount to RIs but flexible across instance families/regions.
 - **Spot Instances** — bid on unused AWS capacity for up to 90% off; AWS can reclaim with a 2-minute warning — only for fault-tolerant/stateless workloads.
 - **Dedicated Hosts/Instances** — physical server dedicated to you; needed for licensing (e.g., BYOL Windows Server) or compliance requirements.
+
+### What is a Placement Group?
+
+A placement group controls how EC2 instances are physically placed relative to each other.
+**Cluster** packs instances close together on the same hardware for lowest network latency
+(HPC, tightly-coupled workloads). **Spread** keeps instances on distinct hardware to
+minimize simultaneous failure risk (small groups of critical instances). **Partition**
+groups instances into logical partitions on separate hardware, isolating failure domains
+for large distributed systems (Hadoop, Cassandra).
 
 ### What is IOPS?
 
@@ -816,6 +885,14 @@ An **image** is the packaged, read-only blueprint (built once, stored in a regis
 ECR). A **container** is a running instance of that image — the same relationship as a
 class and an object, or a recipe and a cooked meal.
 
+### What is Amazon ECR?
+
+Amazon Elastic Container Registry (ECR) is AWS's fully managed Docker/OCI container
+registry — where container images are pushed after being built (e.g., by CodeBuild) and
+pulled from when a node needs to run a container. It's private by default, integrates with
+IAM for push/pull permissions, and scans images for known vulnerabilities. In this project,
+EKS worker nodes pull images from ECR using the `AmazonEC2ContainerRegistryReadOnly` policy.
+
 ### What is Kubernetes, and what problem does it solve?
 
 Once you have many containers running across many machines, you need something to decide
@@ -949,6 +1026,32 @@ Kubernetes RBAC (`Role`, `ClusterRole`, `RoleBinding`) controls **what an alread
 
 ---
 
+## ECS (Elastic Container Service) & Fargate
+
+### What is Amazon ECS, and how is it different from EKS?
+
+ECS is AWS's own container orchestration service — simpler than Kubernetes, with no
+control-plane fee, and tightly integrated with IAM, ALB, and CloudWatch out of the box.
+EKS runs standard Kubernetes (portable across clouds, steeper learning curve, ~$73/month
+control plane fee); ECS uses AWS-proprietary task definitions and services (not portable,
+but faster to learn and free to run — you only pay for the underlying EC2/Fargate compute).
+
+### What is an ECS Task Definition, and what is an ECS Service?
+
+A **Task Definition** is a JSON blueprint describing one or more containers to run together
+(image, CPU/memory, ports, env vars) — the ECS equivalent of a Kubernetes Pod spec. An
+**ECS Service** keeps a specified number of Task instances running, replacing failed ones
+and optionally attaching them to a load balancer — the ECS equivalent of a Deployment.
+
+### What is the difference between the EC2 launch type and the Fargate launch type on ECS?
+
+**EC2 launch type** — you provision and manage the EC2 instances (an ECS-optimized AMI)
+that tasks run on; more control, you patch/scale the instances yourself. **Fargate launch
+type** — fully serverless; AWS runs each task in its own isolated compute, no EC2 instances
+to manage at all, billed per vCPU/memory-second the task actually uses.
+
+---
+
 ## RDS (Relational Database Service)
 
 Supported databases: MySQL, PostgreSQL, Oracle, SQL Server, MariaDB, and Aurora.
@@ -1057,6 +1160,19 @@ At runtime, the application (or an init container / CSI Secrets Store driver) ca
 
 ---
 
+## AWS Systems Manager (SSM)
+
+### What is AWS Systems Manager, beyond Session Manager?
+
+SSM is a suite of tools for operating infrastructure at scale, including:
+- **Session Manager** (already covered) — shell access without SSH/bastion.
+- **Parameter Store** (already covered) — config/secrets storage.
+- **Run Command** — execute commands/scripts across many instances simultaneously without SSH, e.g., "restart nginx on all 50 web servers."
+- **Patch Manager** — automates OS patching schedules across fleets of instances.
+- **Automation** — runs predefined remediation runbooks (referenced earlier under AWS Config).
+
+---
+
 ## CloudWatch (Monitoring & Logging)
 
 ### What's the difference between a CloudWatch Metric, a CloudWatch Alarm, and a CloudWatch Log Group?
@@ -1070,6 +1186,46 @@ By default, if a metric stops reporting data (e.g., briefly during a maintenance
 ### Why set `monitoring_interval = 0` by default, and what's the trade-off of enabling Enhanced Monitoring?
 
 `monitoring_interval = 0` disables **Enhanced Monitoring**, which otherwise gathers OS-level metrics (per-process CPU, memory) at intervals as low as 1 second via a dedicated agent, at additional cost and requiring an extra IAM role. Standard CloudWatch metrics (60-second granularity, DB-engine-level only) are sufficient for most cases and are free — Enhanced Monitoring is worth the added cost primarily when diagnosing OS-level resource contention that engine-level metrics can't explain.
+
+### What is AWS X-Ray, and how is it different from CloudWatch?
+
+CloudWatch tells you *that* something is wrong (a metric spiked, an error logged).
+X-Ray tells you *why*, in a distributed system — it traces a single request as it
+travels across multiple services (API Gateway → Lambda → DynamoDB, etc.), producing a
+visual service map and showing exactly which downstream call added the latency or threw
+the error. Essential once an architecture has more than one hop, where CloudWatch logs
+alone can't show the full request path.
+
+---
+
+## AWS CloudTrail
+
+### What is CloudTrail, and why is it enabled by default?
+
+CloudTrail records every API call made in your AWS account — who made it, when, from what
+IP, and what the request/response contained — as an immutable audit log. A basic 90-day
+event history is enabled automatically for every account at no cost; creating a **Trail**
+extends this to unlimited retention by continuously shipping logs to an S3 bucket (and
+optionally CloudWatch Logs for real-time alerting).
+
+### What is the difference between a Management Event and a Data Event in CloudTrail?
+
+**Management events** record control-plane operations (creating a VPC, changing an IAM
+policy, launching an EC2 instance) and are logged by default. **Data events** record
+high-volume data-plane operations (an S3 `GetObject`, a Lambda invocation) and must be
+explicitly enabled per-resource because of their volume and cost.
+
+---
+
+## AWS Config
+
+### What is AWS Config, and how does it enable compliance automation?
+
+AWS Config continuously records the configuration state of your resources and evaluates
+them against **Config Rules** (AWS-managed or custom, e.g., "flag any S3 bucket that
+becomes publicly readable"). Non-compliant resources can trigger an SNS alert or an
+automated remediation action (via Systems Manager Automation documents), without a human
+manually checking every resource.
 
 ---
 
@@ -1109,6 +1265,14 @@ an outage, without ever actually being lost.
 - **ECS (Elastic Container Service)** — AWS-native container orchestration; simpler than Kubernetes, tightly integrated with other AWS services, but AWS-proprietary (less portable).
 - **EKS** — managed Kubernetes; industry-standard, portable across clouds, but with more operational complexity and a fixed control-plane cost.
 - **Lambda** — fully serverless functions; no servers to manage at all, billed per invocation/duration, but with execution time limits (15 minutes) and cold-start considerations — best for event-driven, short-lived workloads.
+
+### What is Amazon Lightsail, and how is it different from EC2?
+
+Lightsail is AWS's simplified VPS product — fixed monthly pricing bundling compute,
+storage, and data transfer together, a simpler console, and pre-built app blueprints
+(WordPress, LAMP). It trades EC2's fine-grained control (VPC customization, instance
+type variety, Reserved/Spot pricing) for ease of setup, making it the common recommendation
+for beginners, simple websites, or small apps that don't need EC2's full flexibility.
 
 ### What is the difference between an Auto Scaling Group (ASG) launch template and a launch configuration?
 
@@ -1163,6 +1327,13 @@ ELB is the umbrella AWS service name for load balancing; it offers three load ba
 *types*: **ALB** (Layer 7, HTTP/HTTPS — covered below), **NLB** (Layer 4, TCP/UDP —
 covered below), and the legacy **Classic Load Balancer (CLB)**, which predates both and
 is no longer recommended for new applications since ALB/NLB each do its job better.
+
+### What is a Listener and a Target Group?
+
+A **Listener** checks for connection requests on a specific port/protocol (e.g., port 443
+HTTPS) and defines rules for what to do with them. A **Target Group** is the set of actual
+destinations (EC2 instances, IPs, or Lambda functions) the load balancer forwards matched
+traffic to, along with the health check config used to decide if each target is healthy.
 
 ### What's the difference between an Application Load Balancer (ALB) and a Network Load Balancer (NLB)?
 
@@ -1249,9 +1420,47 @@ Lambda runs code in response to events (API calls, S3 uploads, queue messages, s
 
 A cold start happens when Lambda has no warm execution environment available and must provision one from scratch (download code, initialize the runtime, run any top-level/init code) before handling the invocation — adding anywhere from tens of milliseconds to several seconds of latency. Mitigations include **Provisioned Concurrency** (keeping a set number of environments pre-initialized and warm at all times, at extra cost), minimizing package size and avoiding heavy SDK initialization at the top level, choosing a lighter runtime, and using **SnapStart** (available for Java) which caches a post-initialization snapshot to restore from instead of re-running init code.
 
+### What is Lambda concurrency, and what's the difference between Reserved and Provisioned Concurrency?
+
+**Concurrency** is the number of invocations Lambda runs simultaneously. By default, all
+functions in an account share a **regional concurrency pool** (commonly 1,000). **Reserved
+Concurrency** caps (or guarantees) a specific number of concurrent executions for one
+function — protecting other functions from being starved, but throttling that function
+once its cap is hit. **Provisioned Concurrency** (different from Reserved) keeps a set
+number of execution environments pre-warmed at all times, eliminating cold starts for that
+capacity — the mitigation referenced earlier, defined properly here.
+
 ### What's the difference between SQS and SNS, and when would you use each — potentially together?
 
 **SQS (Simple Queue Service)** is a **pull-based message queue** — consumers poll for messages, and each message is typically processed by exactly one consumer (in standard queues, at-least-once delivery; FIFO queues add strict ordering and exactly-once processing). **SNS (Simple Notification Service)** is a **pub/sub push-based** topic — a single published message can fan out to many subscribers simultaneously (SQS queues, Lambda functions, HTTP endpoints, email). A common pattern is **SNS fan-out to SQS**: publish once to an SNS topic, and have multiple independent SQS queues subscribed so each downstream service processes the same event independently and durably, decoupling producers from an arbitrary number of consumers.
+
+### What's the difference between an SQS Standard queue and a FIFO queue, and what is a DLQ?
+
+**Standard** queues offer nearly unlimited throughput but only **at-least-once delivery**
+with **best-effort ordering** (a message can occasionally arrive out of order or be
+delivered twice). **FIFO** queues guarantee strict ordering and **exactly-once
+processing**, but cap throughput (300 msg/sec, or 3,000/sec with batching), and require a
+`MessageGroupId` to define ordering groups. A **Dead Letter Queue (DLQ)** is a separate
+queue that a source queue automatically forwards messages to after they fail processing
+more than a configured number of times (`maxReceiveCount`) — preventing a single poison
+message from blocking the queue forever and giving you a place to inspect failures.
+
+### What is Amazon Kinesis, and how is it different from SQS?
+
+Kinesis Data Streams ingests and retains high-volume, ordered streaming data (clickstreams,
+IoT telemetry, log data) for a configurable retention window, allowing **multiple
+independent consumers to read the same data at their own pace** — unlike SQS, where a
+message is typically consumed once and removed. Kinesis is used when you need real-time
+analytics or multiple downstream applications processing the same event stream; SQS is
+used for simple point-to-point work queues.
+
+### What is Amazon SES?
+
+Amazon Simple Email Service (SES) is a managed service for sending and receiving email at
+scale — transactional emails (password resets, order confirmations), marketing emails, or
+receiving/parsing inbound mail. It's commonly paired with Lambda (SES receipt rules
+triggering a function) or called directly from application code via the SDK, and requires
+verifying a domain or email address before sending.
 
 ### What is Amazon EventBridge, and how is it different from SQS/SNS?
 
@@ -1263,9 +1472,54 @@ rules can filter on the actual JSON payload of an event, making it the standard 
 routing structured AWS-service events (e.g., "an EC2 instance just changed state") rather
 than plain pub/sub messages.
 
+### What is AWS Step Functions?
+
+Step Functions lets you coordinate multiple Lambda functions (or other AWS services) into
+a visual, ordered workflow ("state machine") — handling retries, error branches, parallel
+steps, and waiting, without writing that orchestration logic yourself. It's the standard
+way to chain together multi-step serverless processes (e.g., "process upload → validate →
+notify") instead of one Lambda calling another directly.
+
 ### What is API Gateway, and what are the three API types it supports?
 
 API Gateway is a fully managed service for creating, publishing, and securing APIs at scale, handling traffic management, authorization, throttling, and monitoring. It supports **REST APIs** (full-featured, request/response transformation, usage plans), **HTTP APIs** (a lighter, cheaper, lower-latency subset optimized for simple Lambda/HTTP proxying), and **WebSocket APIs** (for persistent, bidirectional real-time connections like chat applications).
+
+### How does API Gateway authenticate/authorize requests, and how does it prevent abuse?
+
+API Gateway supports three authorizer types: **IAM** (SigV4-signed requests, for
+AWS-to-AWS calls), **Cognito User Pool authorizers** (validates a JWT issued by Cognito),
+and **Lambda authorizers** (custom code that inspects the request and returns an
+allow/deny policy — used for API keys, third-party OAuth tokens, etc.). Separately,
+**usage plans + API keys** and built-in **throttling** (requests/sec and burst limits) protect
+backends from being overwhelmed by a single noisy client, independent of authentication.
+
+### What are the core DynamoDB concepts: Table, Item, Attribute, and Primary Key?
+
+A **Table** is a collection of data (like a spreadsheet with no fixed columns). An
+**Item** is a single row/record. An **Attribute** is a single field on that item (columns
+can differ item to item — DynamoDB is schema-less except for the primary key). The
+**Primary Key** uniquely identifies an item and is either:
+- **Simple (Partition Key only)** — one attribute, must be unique across the table.
+- **Composite (Partition Key + Sort Key)** — the partition key groups related items, and
+  the sort key orders/uniquely identifies items within that group (e.g., `userId` as
+  partition key, `orderDate` as sort key — lets you query "all orders for this user,
+  sorted by date").
+
+### What is a Global Secondary Index (GSI) vs a Local Secondary Index (LSI)?
+
+Both let you query DynamoDB by an attribute other than the primary key. A **GSI** can use
+a completely different partition key (and optional sort key) than the base table, has its
+own provisioned capacity, and can be added/removed after table creation. An **LSI** must
+share the base table's partition key (only the sort key differs), must be defined at table
+creation time, and shares the base table's capacity. GSIs are far more commonly used in
+practice because of this flexibility.
+
+### What is the difference between Provisioned and On-Demand capacity mode?
+
+**Provisioned** — you specify read/write capacity units up front (optionally with Auto
+Scaling); cheaper at steady, predictable traffic. **On-Demand** — DynamoDB scales
+automatically with no capacity planning, billed per request; simpler and safer for
+unpredictable or spiky traffic, but more expensive per-request at high, steady volume.
 
 ### What is DynamoDB, and how does partition key design affect performance?
 
@@ -1274,6 +1528,15 @@ DynamoDB is a fully managed, serverless NoSQL key-value/document database offeri
 ---
 
 ## Content Delivery, DNS & Global Services
+
+### What is AWS Global Accelerator, and how is it different from CloudFront?
+
+Both use AWS's edge network, but for different traffic types. CloudFront caches and
+serves **HTTP(S) content** closer to users. Global Accelerator doesn't cache anything —
+it gives you static Anycast IPs that route **any TCP/UDP traffic** (not just HTTP) onto
+AWS's private backbone network as early as possible, improving performance for non-
+cacheable or non-HTTP workloads (gaming, VoIP, IoT) and enabling instant regional failover
+without a DNS change.
 
 ### What is a CDN (Content Delivery Network), in plain terms?
 
@@ -1314,6 +1577,14 @@ routing policies and health checks below.
 ### What is the CAP theorem, and how does it relate to choosing between RDS and DynamoDB for a given workload?
 
 CAP theorem states a distributed system can only guarantee two of three properties during a network partition: **Consistency** (every read sees the latest write), **Availability** (every request gets a response), and **Partition tolerance** (the system keeps working despite network splits). RDS (a traditional relational, strongly consistent single-primary system) prioritizes consistency, potentially sacrificing availability during a failover window. DynamoDB defaults to **eventual consistency** for reads (favoring availability and partition tolerance) but offers **strongly consistent reads** as an opt-in per-request trade-off, consuming more read capacity in exchange for guaranteed up-to-date data.
+
+### What is Amazon Redshift, and how does it differ from RDS?
+
+RDS is built for **OLTP** (many small, fast transactional reads/writes — orders, user
+accounts). Redshift is a managed **data warehouse** built for **OLAP** (large, complex
+analytical queries scanning millions/billions of rows — "total revenue by region by
+quarter") using columnar storage and massively parallel query execution — not meant for
+high-frequency single-row transactions.
 
 ---
 
@@ -1415,6 +1686,14 @@ Three things to set up on day one, before touching any other service:
 - **Developer** — paid; business-hours email access to Cloud Support Associates.
 - **Business** — paid; 24/7 phone/chat/email, faster response SLAs, Trusted Advisor full checks.
 - **Enterprise (On-Ramp/Enterprise)** — paid; a named Technical Account Manager (TAM), fastest SLAs, architectural guidance — aimed at production-critical workloads.
+
+### What is AWS Trusted Advisor?
+
+Trusted Advisor automatically scans your account and flags recommendations across cost
+optimization, security, fault tolerance, performance, and service limits — e.g., idle
+EC2 instances, open security groups, unattached Elastic IPs, or S3 buckets without
+versioning. Basic checks are free for all accounts; full checks require a Business or
+Enterprise support plan.
 
 ### What should you do in the first 10 minutes of a new AWS account, before creating anything?
 
@@ -1583,6 +1862,15 @@ Amazon FSx is a fully managed service that simplifies the deployment, operation,
 - **Business continuity** — simplifies backup, archiving, and disaster recovery with secure and durable storage.
 - **Media & entertainment** — high-performance storage for rendering, transcoding, and editing across multiple operating systems.
 
+### S3 vs EBS vs EFS vs FSx — how do you choose?
+
+| | Type | Attach point | Best for |
+|---|---|---|---|
+| S3 | Object storage | Accessed via API/HTTP | Files, backups, static assets, unlimited scale |
+| EBS | Block storage | One EC2 instance at a time | A server's own disk (OS, databases) |
+| EFS | Network file system | Many instances/pods simultaneously | Shared Linux file access across a fleet |
+| FSx | Managed file system (Windows/Lustre/etc.) | Many instances, protocol-specific | Windows SMB shares, HPC, specialized workloads |
+
 ---
 
 ## AWS WAF & Shield
@@ -1616,6 +1904,37 @@ AWS Shield is a managed Distributed Denial of Service (DDoS) protection service.
 ### Comparison and Use Cases
 
 Use AWS WAF if you need granular control over web traffic and protection against specific web application vulnerabilities. Use AWS Shield if you need robust protection against DDoS attacks and want to ensure resource availability under attack. For comprehensive protection, use both together as a multi-layered defense strategy.
+
+---
+
+## GuardDuty, Security Hub & Inspector
+
+### What is Amazon GuardDuty?
+
+GuardDuty is a managed threat-detection service that continuously analyzes VPC Flow Logs,
+CloudTrail events, and DNS logs using machine learning to flag suspicious activity —
+compromised credentials, crypto-mining, unusual API calls, or traffic to known malicious
+IPs — without you having to build or maintain detection rules yourself.
+
+### What is AWS Security Hub?
+
+Security Hub aggregates and prioritizes security findings from GuardDuty, Inspector,
+Macie, and third-party tools into one dashboard, and continuously checks resources
+against security standards (CIS AWS Foundations, PCI-DSS) — a single pane of glass
+instead of checking each security service separately.
+
+### What is Amazon Inspector?
+
+Inspector automatically scans EC2 instances, container images (in ECR), and Lambda
+functions for known software vulnerabilities (CVEs) and unintended network exposure,
+rescanning continuously as new CVEs are published — rather than requiring a manual,
+one-time scan.
+
+### What is Amazon Macie?
+
+Macie uses machine learning to automatically discover and classify sensitive data (PII,
+credentials, financial data) stored in S3, and flags buckets that are publicly accessible
+or unencrypted — without you having to write detection rules for what "sensitive" means.
 
 ---
 
