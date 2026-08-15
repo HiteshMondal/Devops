@@ -152,6 +152,7 @@ Always double-check for that `#` before running anything destructive — it mean
 
 ```bash
 pwd              # print current directory
+cd               # no argument -> takes you straight to home directory (same as cd ~)
 cd /path/to/dir  # absolute path
 cd ..            # go up one level
 cd ~             # go to home directory
@@ -174,6 +175,21 @@ mkdir backup && cd backup          # cd only runs if mkdir succeeded
 ping -c 1 google.com || echo "No internet"
 apt update && apt upgrade && apt autoremove   # chain multiple steps, stop if any fails
 ```
+
+### echo — Print Text to the Terminal
+
+```bash
+echo Hello                  # Hello
+echo "Hello World"          # Hello World
+echo 'Hello World'          # Hello World (same, no expansion happening here anyway)
+echo $USER                  # prints current username
+echo "User: $USER"          # User: hitesh
+
+echo -n "No newline"        # suppresses trailing newline
+echo -e "Line1\nLine2\tTabbed"   # -e enables \n, \t escape sequences
+echo "Line1\nLine2"          # without -e, \n prints literally
+```
+> `echo` is the most-used command in shell scripts — for printing messages, debugging variable values, and building strings. See [printf vs echo](#printf-vs-echo) later for formatted output.
 
 ### Absolute vs Relative Paths
 
@@ -230,8 +246,10 @@ echo *.txt               # output:
 ```bash
 man ls              # full manual page: description, all options, examples
 man -k copy         # search man page descriptions for "copy" (like apropos)
+apropos copy        # same as `man -k copy` — search man page descriptions by keyword
 ls --help           # short built-in usage summary (most GNU commands support this)
 whatis ls           # one-line description only
+bash --version       # Check installed version of a program (works for most: git --version, python3 --version, curl --version)
 info ls             # some tools have more detailed "info" documentation (GNU-specific)
 ```
 
@@ -263,6 +281,32 @@ Why this matters:
 - If you have two versions of a command installed, `which` tells you which one will actually execute
 - `type` catches things `which` misses — e.g. if `ll` is an alias, `which ll` might say "not found" while `type ll` shows the alias definition
 - Useful for debugging "command not found" or "wrong version is running" issues, especially with `$PATH` problems
+
+### date — Show or Format the Current Date/Time
+
+```bash
+date                          # Sat Aug 15 10:30:00 IST 2026
+date +%Y-%m-%d                # 2026-08-15
+date +%H:%M:%S                # 10:30:00
+date +"%A, %d %B %Y"          # Saturday, 15 August 2026
+date -d "3 days ago"          # date 3 days in the past (GNU date)
+date -d "next monday"         # upcoming Monday's date
+```
+| Format | Meaning |
+|---|---|
+| `%Y` | 4-digit year | 
+| `%m` | Month (01-12) |
+| `%d` | Day (01-31) |
+| `%H:%M:%S` | Hour:Minute:Second (24h) |
+| `%A` | Full weekday name |
+
+### cal — Calendar
+
+```bash
+cal                # current month
+cal 2026            # whole year
+cal 8 2026          # August 2026
+```
 
 ### alias — Shortcuts for Frequently Used Commands
 
@@ -459,6 +503,7 @@ ls [OPTIONS] [FILE/DIRECTORY]
 | `ls -la` / `ls -lah` | Combines long format + hidden files (+ human-readable sizes) |
 | `ls -lh` | Long format with human-readable file sizes (KB, MB, GB) |
 | `ls -lt` | Long format sorted by modification time (newest first) |
+| `ls -R` | Recursively lists all files in subdirectories too |
 
 Example output of `ls -l`:
 ```bash
@@ -486,6 +531,16 @@ $ ls -a
 - *Difference between `ls` and `ls -l`?* `ls` only shows names. `ls -l` shows detailed information.
 - *What does `ls -a` show?* Hidden files starting with `.`.
 
+> **Color cheat sheet (default terminal colors):** blue = directory · green = executable file · white/default = regular file · cyan = symbolic link · red = archive (.tar, .zip) · yellow/black-on-yellow = device file.
+
+### tree — Visualize Directory Structure
+
+```bash
+tree                    # Show folder structure as a tree (may need: apt install tree)
+tree -L 2               # Limit depth to 2 levels
+tree -a                 # Include hidden files
+tree -d                 # Directories only, no files
+```
 
 ### Filenames with Spaces
 
@@ -557,8 +612,10 @@ cp [OPTIONS] SOURCE DESTINATION
 cp file.txt backup.txt      # Copy file
 cp -r project backup/       # Copy directory (recursive; without -r: "omitting directory")
 cp -p file.txt backup.txt   # Preserve ownership, timestamps, permissions
+cp -i file.txt backup.txt   # Interactive: asks "overwrite?" before replacing an existing file
 cp -v file.txt backup.txt   # Verbose: 'file.txt' -> 'backup.txt'
 cp report{,.bak}            # expands to: cp report report.bak
+cp -a project backup/       # Archive mode: recursive + preserves permissions/timestamps/links (shortcut for -dR --preserve=all)
 ```
 > Why is `-r` required? Directories contain subdirectories/files — recursive mode copies everything.
 
@@ -572,6 +629,7 @@ mv report.pdf /home/user/Documents/         # Move file
 mv *.txt backup/                            # Move multiple files
 mv project old_project                      # Rename directory
 mv file?.txt archive/                       # only single-char-suffix files
+mv -i old.txt new.txt       # Interactive: asks before overwriting an existing destination file
 ```
 
 ### rm / rmdir — Remove Files & Directories
@@ -630,6 +688,7 @@ find / -name "file.txt"               # Find anywhere on system
 find /home -name "*.sh"               # Find all shell scripts
 find /var -name "*.log"               # Find all log files
 find . -name "config*"                # Find files starting with config
+find . -iname "readme*"               # Case-insensitive name search (matches README, ReadMe, readme...)
 
 # Find by type
 find /tmp -type f                     # Files only
@@ -662,6 +721,33 @@ find /home -type f -exec chmod 644 {} \;   # Fix permissions
 # Other examples
 find . -type f -size 1033c ! -executable                  # human-readable, 1033 bytes, not executable
 find / -type f -user bandit7 -group bandit6 -size 33c 2>/dev/null
+```
+
+### stat — Detailed File Information
+
+```bash
+stat file.txt
+# Shows size, permissions, owner, inode, and access/modify/change timestamps
+# More detail than `ls -l` — useful for checking exactly when a file changed
+```
+
+### basename / dirname — Split a Path
+
+```bash
+basename /home/user/project/app.sh    # app.sh (just the filename)
+basename /home/user/project/          # project (last folder name)
+dirname /home/user/project/app.sh     # /home/user/project (path without filename)
+```
+> Commonly used inside scripts to build filenames or figure out a script's own directory:
+```bash
+SCRIPT_DIR=$(dirname "$0")
+```
+
+### realpath — Resolve the Full Absolute Path
+
+```bash
+realpath ../notes.txt        # /home/user/notes.txt
+realpath ./script.sh         # turns a relative path into an absolute one
 ```
 
 ### Soft Link (Symbolic) vs Hard Link — See [Links](#links-soft-vs-hard)
@@ -792,6 +878,24 @@ Others (world): r--  = 4
 | `p` | Named pipe |
 | `s` | Socket |
 
+### What r, w, x Actually Mean on a Directory
+
+Permissions behave differently on directories than on files — a very common beginner confusion:
+
+| Permission | On a File | On a Directory |
+|-----------|-----------|-----------------|
+| `r` | Read file contents | List filenames inside (`ls`) |
+| `w` | Modify file contents | Create/delete/rename files inside |
+| `x` | Execute the file as a program | "Enter" the directory (`cd`) and access items inside |
+
+```bash
+# You can "cd" into a folder you can't "ls" if you have x but not r
+chmod 711 folder/    # owner: full, group/others: execute only (traverse but not list)
+
+# You need x on EVERY parent directory in a path to access a file deep inside it
+# e.g. to read /a/b/c.txt you need x on /a and /a/b, plus r on c.txt
+```
+
 ### Special Permissions
 
 ```bash
@@ -825,6 +929,7 @@ Every Linux system has one special account called **root** (UID `0`). Root bypas
 # Add user
 useradd hitesh                         # Create user
 useradd -m -s /bin/bash hitesh         # With home dir and bash shell
+passwd                                 # Change YOUR OWN password (no username needed — most common everyday use)
 passwd hitesh                          # Set password
 
 # Modify user
