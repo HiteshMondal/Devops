@@ -85,6 +85,9 @@ NAME="Hi"; name="Bye"      # two different variables
 - **exec()**: replaces the current process with another program.
 - **Process states**: Running, Sleeping, Zombie (finished but not reaped by parent), Orphan (parent died first).
 
+### What Is a Daemon?
+A **daemon** is a background process with no controlling terminal, usually started at boot and running for the system's lifetime (e.g. `sshd`, `crond`, `systemd`). By convention many daemon names end in `d`. You interact with most daemons via `systemctl` rather than by talking to them directly.
+
 #### `exec` Command
 
 The shell builtin `exec` replaces the current shell process with the specified program.
@@ -154,7 +157,6 @@ Always double-check for that `#` before running anything destructive — it mean
 pwd              # print current directory
 cd               # no argument -> takes you straight to home directory (same as cd ~)
 cd /path/to/dir  # absolute path
-cd ..            # go up one level
 cd ~             # go to home directory
 cd -             # go to previous directory
 cd ./-           # View dashed filename "-"
@@ -175,6 +177,15 @@ mkdir backup && cd backup          # cd only runs if mkdir succeeded
 ping -c 1 google.com || echo "No internet"
 apt update && apt upgrade && apt autoremove   # chain multiple steps, stop if any fails
 ```
+
+**Why this works — conceptually:** every command returns an exit status (`$?`) of `0` (success) or non-zero (failure). `&&` and `||` are short-circuit operators that check that status:
+
+| Left command | Operator | Right command runs? |
+|---|---|---|
+| Succeeds (0) | `&&` | Yes |
+| Fails (non-zero) | `&&` | No |
+| Succeeds (0) | `\|\|` | No |
+| Fails (non-zero) | `\|\|` | Yes |
 
 ### echo — Print Text to the Terminal
 
@@ -420,6 +431,7 @@ ps aux | grep node | awk '{print $2}' | xargs kill -9
 export NAME="Hitesh"
 export PATH="$PATH:/opt/myapp/bin"
 export TERM=linux
+```
 
 ### .bashrc vs .bash_profile vs .profile
 
@@ -470,6 +482,7 @@ stty size              # Show terminal rows and columns
 stty rows 5            # Set terminal height to 5 rows
 stty columns 80        # Set terminal width to 80 columns
 stty -a                # Show all current terminal settings
+```
 
 ### Getting Unstuck
 When a command or program seems frozen or you're dropped into an unfamiliar screen:
@@ -479,9 +492,9 @@ When a command or program seems frozen or you're dropped into an unfamiliar scre
 | Stuck inside less, man, or git log | Press q to quit |
 | Command running forever / frozen terminal | Ctrl+C to interrupt/kill it |
 | Accidentally paused a program | Ctrl+Z to suspend, then fg to resume it |
-| Typed cat with no file, terminal waiting |Ctrl+D to send EOF and exit |
+| Typed cat with no file, terminal waiting | Ctrl+D to send EOF and exit |
 | Stuck inside vi/vim | Press Esc then type :q! and Enter |
-| Terminal looks garbled/broken |Type reset and press Enter |
+| Terminal looks garbled/broken | Type reset and press Enter |
 
 Rule of thumb: q for pagers/viewers, Ctrl+C for running commands, Ctrl+D for input prompts.
 
@@ -982,6 +995,24 @@ chage -l hitesh        # show password expiry info
 chage -M 90 hitesh     # force password change every 90 days
 ```
 
+### /etc/services & /etc/nsswitch.conf
+
+```text
+/etc/services - maps service names to port numbers/protocols, used by networking tools:
+http    80/tcp
+https   443/tcp
+ssh     22/tcp
+
+/etc/nsswitch.conf - tells the system WHERE to look up things like hostnames, users, and passwords, and in what order:
+hosts:    files dns        # check /etc/hosts first, then DNS
+passwd:   files            # check /etc/passwd
+```
+
+```bash
+cat /etc/services | grep ssh      # look up a service's default port
+cat /etc/nsswitch.conf            # view name resolution order
+```
+
 ### su vs sudo -i
 
 ```bash
@@ -990,6 +1021,8 @@ su - username       # switch user with full login environment (like a fresh logi
 sudo -i             # switch to root using YOUR password, full root login environment
 sudo -s             # switch to root shell but keep current environment
 ```
+**Interview Q&A:** *What's the core difference between `su` and `sudo`?*
+`su` switches you to another user's full session and requires **that user's password**. `sudo` runs a **single command as root** (or another user) using **your own password**, then returns you to your normal session — making it safer, more auditable (logged per-command), and more granular (admins can restrict exactly which commands a user may run via `/etc/sudoers`).
 
 ### who, w, last, lastlog
 
@@ -1027,7 +1060,6 @@ sudo -l          # List what the current user can run with sudo
 
 ```bash
 ssh -p port_number username@hostname
-# If .bashrc has been modified so that when an interactive SSH shell starts, it executes something that logs you out
 ssh -p port_number username@hostname cat readme
 
 # Generate Key
@@ -1536,6 +1568,49 @@ dnf install nginx             # dnf is modern replacement for yum
 
 ---
 
+## Disk Partitioning & Mounting
+
+```bash
+# View disks and partitions
+lsblk                      # Tree view of block devices
+fdisk -l                   # List all partitions (detailed)
+parted -l                  # Modern alternative to fdisk, supports GPT
+
+# Partitioning (choose one tool)
+fdisk /dev/sdb             # Interactive - MBR/legacy, simple menu (n, p, w)
+parted /dev/sdb            # Interactive - supports GPT, large disks (>2TB)
+
+# Create a filesystem on a partition
+mkfs.ext4 /dev/sdb1        # Format as ext4
+mkfs.xfs /dev/sdb1         # Format as XFS
+mkswap /dev/sdb2           # Format as swap space
+
+# Mount / unmount
+mkdir /mnt/data
+mount /dev/sdb1 /mnt/data       # Mount manually
+umount /mnt/data                # Unmount
+mount -a                        # Mount everything listed in /etc/fstab
+
+# Enable swap
+swapon /dev/sdb2
+swapoff /dev/sdb2
+swapon -s                       # Show active swap
+```
+
+### /etc/fstab Format
+
+Defines what gets mounted automatically at boot (see [Mounting](#mounting-etcfstab--partitions)):
+```text
+<device>        <mount point>   <fs type>  <options>       <dump>  <pass>
+/dev/sda1       /               ext4       defaults        0       1
+/dev/sdb1       /mnt/data       ext4       defaults        0       2
+UUID=xxxx-xxxx  none            swap       sw              0       0
+```
+- `dump`: 1 = back up with `dump` utility, 0 = skip
+- `pass`: order `fsck` checks filesystems at boot; `0` = don't check, `1` = root first
+
+---
+
 ## System Monitoring & Resources
 
 ### df — Disk Free
@@ -1662,6 +1737,20 @@ shutdown -r +5 "Rebooting in 5 mins"   # Scheduled with message
 shutdown -c             # Cancel a scheduled shutdown
 ```
 
+### ulimit — Per-Process Resource Limits
+
+`ulimit` controls the resource limits (file handles, memory, processes, etc.) available to processes started from the current shell — commonly checked/tuned for servers running databases or high-connection services.
+
+```bash
+ulimit -a               # show all current limits
+ulimit -n                # max open file descriptors
+ulimit -n 4096            # set max open file descriptors (session only)
+ulimit -u                  # max number of user processes
+ulimit -Hn                  # show the hard limit (ceiling) for open files
+ulimit -Sn                   # show the soft limit (current enforced value)
+```
+> Permanent changes go in `/etc/security/limits.conf`, not in a shell session (session changes reset on logout).
+
 ---
 
 ## Process Management
@@ -1706,6 +1795,19 @@ top             # Launch top
 ```
 > Alternative: `htop` is a more user-friendly, colored version of `top`. Install with: `apt install htop`
 
+### nice / renice — Process Priority
+
+Every process has a **niceness** value from `-20` (highest priority) to `19` (lowest priority). Default is `0`. Lower niceness = more CPU priority.
+
+```bash
+nice -n 10 ./script.sh        # start a process with lower priority (nice to others)
+nice -n -5 ./script.sh        # higher priority (requires root for negative values)
+renice 5 -p PID                # change priority of an already-running process
+renice -n -10 -p PID           # requires sudo for negative values
+ps -o pid,ni,cmd -p PID        # check a process's current niceness
+```
+> Rule of thumb: raise niceness (be "nicer") for background/batch jobs so they don't starve interactive processes.
+
 ### Kill, Background & Foreground
 
 ```bash
@@ -1740,6 +1842,12 @@ kill PID              # kill by process ID
 pkill nginx            # kill by process name (pattern match)
 killall nginx          # kill all processes with exact name match
 ```
+
+### Quick Interview One-Liners
+
+- **`kill` vs `kill -9`?** `kill` (SIGTERM) asks the process to shut down gracefully — it can catch the signal and clean up first. `kill -9` (SIGKILL) terminates it immediately at the kernel level — it cannot be caught, ignored, or blocked, so no cleanup happens.
+- **Process vs Program?** A program is a static file on disk (executable code, not running). A process is a program in execution — loaded into memory, with its own PID, memory space, and system resources.
+- **What happens to a hard link's data if the original file is deleted?** Nothing — the data survives. Hard links point to the same inode, and the data is only actually removed once the *link count* on that inode drops to zero (i.e., every hard link pointing to it has been deleted).
 
 ---
 
@@ -1831,6 +1939,15 @@ journalctl -p err                 # Only error-level and above
 
 ## Links (Soft vs Hard)
 
+### What Is an Inode?
+Every file on Linux is represented by an **inode** — a data structure storing metadata (permissions, owner, size, timestamps, pointers to data blocks) but **not** the filename itself. The filename is just a label in a directory that points to an inode number.
+
+```bash
+ls -i file.txt        # show a file's inode number
+df -i                  # show inode usage per filesystem
+```
+This is why you can run out of disk space ("No space left on device") even with free bytes available — if inodes are exhausted, no new files can be created.
+
 | Feature | Soft Link (Symbolic) | Hard Link |
 |---------|---------------------|-----------|
 | Points to | File name/path | File inode (actual data) |
@@ -1887,6 +2004,21 @@ $ ln -s /var/log/syslog mysyslog
 $ ls -l mysyslog
 lrwxrwxrwx 1 hitesh hitesh 15 Jun 10 10:00 mysyslog -> /var/log/syslog
 ```
+
+**Gotcha — moving a symlink vs moving its target:**
+```bash
+ln -s /tmp/data.txt link.txt
+
+mv link.txt /home/user/     # fine — the link itself just moves, still points to /tmp/data.txt
+
+mv /tmp/data.txt /tmp/new.txt   # BREAKS the link — link.txt now points to a path that no longer exists ("dangling link")
+```
+A symlink stores a **path string**, not a reference to the file itself — moving or renaming the *target* breaks every symlink pointing to the old path. Hard links are immune to this because they point to the inode, not a path.
+
+**Interview Q&A:**
+- *Can you hard-link a directory?* No — hard links to directories are disallowed by the filesystem (to prevent loops in the directory tree). Only symbolic links can point to directories.
+- *Can a hard link cross filesystems/partitions?* No — hard links require the same inode table, so source and link must be on the same filesystem. Symlinks have no such restriction.
+- *If you `cat` a broken symlink, what happens?* `cat: link.txt: No such file or directory` — the link itself still exists (`ls -l` shows it), but it points nowhere.
 
 ---
 
@@ -1955,8 +2087,6 @@ base64 -d image.b64 > image_copy.png
 # Encode and Decode JSON
 echo -n '{"name":"Alice"}' | base64
 echo "eyJuYW1lIjoiQWxpY2UifQ==" | base64 -d
-
-# 
 ```
 
 ---
@@ -1990,8 +2120,8 @@ A shell script is a plain text file containing a series of Linux/Unix commands e
 
 # Variables
 NAME="Hitesh"
-echo "Hello, $name"     # Hello, Hitesh   (double quotes expand variables)
-echo 'Hello, $name'     # Hello, $name    (single quotes DO NOT expand — printed literally)
+echo "Hello, $NAME"     # Hello, Hitesh   (double quotes expand variables)
+echo 'Hello, $NAME'     # Hello, $NAME    (single quotes DO NOT expand — printed literally)
 DATE=$(date +%Y-%m-%d)
 
 # Main logic
@@ -2097,6 +2227,17 @@ echo "Files in current dir: $file_count"
 readonly MAX_RETRIES=3
 readonly APP_NAME="MyApp"
 
+# declare — Variable Attributes
+declare -i count=5        # integer type - arithmetic works without $(( ))
+count=count+1
+echo $count                # 6
+
+declare -r PI=3.14         # read-only, same effect as `readonly`
+declare -x APP_ENV=prod    # exported, same effect as `export`
+declare -a arr             # explicitly declare an indexed array
+declare -A map             # explicitly declare an associative array
+declare -p count            # print a variable's declared attributes and value
+
 # Unset a variable
 unset age
 echo "Age: $age"    # Will print nothing
@@ -2129,7 +2270,17 @@ $LINENO      # Current line number in script
 $$           # PID of current shell/script
 $!           # PID of last background process
 $?           # Exit status of last command (0 = success, non-zero = failure)
+```
 
+**`"$@"` vs `"$*"` — the difference that actually matters:**
+```bash
+set -- "a b" "c"
+for x in "$@"; do echo "[$x]"; done   # [a b]  [c]   -> preserves each argument
+for x in "$*"; do echo "[$x]"; done   # [a b c]        -> merges into ONE string
+```
+> Interview one-liner: `"$@"` expands to separate quoted words (safe for loops over arguments), `"$*"` expands to a single word joined by the first character of `$IFS`. Always prefer `"$@"` when looping over script arguments.
+
+```bash
 # Script positional parameters
 $0           # Script name
 $1           # First argument
@@ -2147,6 +2298,21 @@ echo $PATH    # /usr/local/bin:/usr/bin:/bin
 export PATH=$PATH:/home/hitesh/scripts
 # Now scripts in that folder can run without ./ or full path
 ```
+**Interview Q&A:** *What happens if two commands with the same name exist in different `$PATH` directories?*
+The shell searches `$PATH` directories **in order, left to right**, and runs the **first match** it finds. `which command` or `type command` tells you exactly which one will execute. This is also why prepending vs appending to `$PATH` matters:
+```bash
+export PATH="/custom/bin:$PATH"   # custom/bin checked FIRST (takes priority)
+export PATH="$PATH:/custom/bin"   # custom/bin checked LAST (fallback only)
+```
+
+### Shell Variable vs Environment Variable
+
+| Type | Scope | Set With | Visible To |
+|------|-------|----------|-----------|
+| Shell variable | Current shell only | `var=value` | Only the shell it was defined in |
+| Environment variable | Current shell + all child processes | `export var=value` | The shell AND any program/script it launches |
+
+> Interview one-liner: *Every environment variable is a shell variable, but not every shell variable is an environment variable — `export` is what promotes one to the other.*
 
 ### export and Environment Variables
 
