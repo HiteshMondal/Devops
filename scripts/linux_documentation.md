@@ -286,6 +286,8 @@ type cd
 # -> Tells you HOW the command resolves: builtin, alias, function, or file
 
 type -a python    # shows ALL matches (alias, function, AND binary) if there are multiple
+
+command -v python3    # POSIX-portable way to check if a command exists (scriptable, unlike `which`)
 ```
 
 Why this matters:
@@ -497,6 +499,28 @@ When a command or program seems frozen or you're dropped into an unfamiliar scre
 | Terminal looks garbled/broken | Type reset and press Enter |
 
 Rule of thumb: q for pagers/viewers, Ctrl+C for running commands, Ctrl+D for input prompts.
+
+### screen / tmux — Persistent Terminal Sessions
+
+Unlike `nohup`, these let you fully detach and reattach to a *live interactive* session later — essential when SSH connections drop.
+
+```bash
+# tmux (modern, more common)
+tmux new -s mysession       # start a named session
+tmux ls                     # list sessions
+tmux attach -t mysession    # reattach
+tmux kill-session -t mysession
+
+# Inside tmux: Ctrl+B then D  -> detach (session keeps running)
+
+# screen (older, still on many servers)
+screen -S mysession         # start named session
+screen -ls                  # list sessions
+screen -r mysession         # reattach
+
+# Inside screen: Ctrl+A then D  -> detach
+```
+> Interview one-liner: `nohup cmd &` survives logout but you can't reattach to interact with it; `tmux`/`screen` give you a persistent *interactive* session you can detach and reattach to.
 
 ---
 
@@ -923,6 +947,11 @@ chmod g+s /shared/folder
 # Sticky Bit - only owner can delete their own files
 chmod +t /tmp
 # Shows as: drwxrwxrwt
+
+# Same permissions, numeric (4-digit) form — leading digit: 4=SUID, 2=SGID, 1=Sticky
+chmod 4755 /usr/bin/passwd     # SUID + rwxr-xr-x
+chmod 2775 /shared/folder      # SGID + rwxrwxr-x
+chmod 1777 /tmp                # Sticky + rwxrwxrwx
 ```
 
 ---
@@ -1648,6 +1677,9 @@ du -sh /var/log/*.log    # Size of individual log files
 
 # Practical: Find top 10 largest directories
 du -h /home | sort -rh | head -10
+
+# Finding largest files, not just directories
+find / -xdev -type f -exec du -h {} + | sort -rh | head -10
 ```
 
 ### System Resource Overview
@@ -1662,7 +1694,9 @@ vmstat 1                 # Virtual memory stats every 1 second
 vmstat -s                # Summary memory stats
 mpstat                   # Per-CPU statistics
 pidstat                  # CPU usage per process
-uptime                   # Load average overview
+uptime                   # Load average overview.
+# The three uptime numbers are averages of processes wanting CPU over the last 1/5/15 min.
+# Compare against nproc — load 4.0 is fine on 8 cores, maxed out on 4.
 
 # Memory
 free -m                  # Memory in megabytes
@@ -1782,6 +1816,20 @@ root         1     0  0 09:01 ?        00:00:03 /sbin/init
 hitesh    1234  1200  0 09:05 pts/0    00:00:00 bash
 ```
 
+**Process STAT codes:**
+
+| Code | Meaning |
+|------|---------|
+| `R` | Running/runnable |
+| `S` | Sleeping |
+| `D` | Uninterruptible sleep (usually I/O) |
+| `Z` | Zombie — finished, not yet reaped |
+| `T` | Stopped |
+
+> You can't kill a zombie directly — it's already dead. Fix it by killing/fixing its
+> **parent** so the parent reaps it. If the parent dies first, the zombie is
+> re-parented to `init`/`systemd` (PID 1), which reaps it automatically.
+
 ```bash
 # top - Interactive Process Monitor
 top             # Launch top
@@ -1819,6 +1867,8 @@ ps aux --sort=-%cpu | head     # Top CPU consumers
 kill PID                       # Send SIGTERM (graceful)
 kill -9 PID                    # Send SIGKILL (force)
 kill -15 PID                   # Send SIGTERM explicitly
+kill -l                        # list all available signal names and numbers
+kill -l 9                      # look up the name for signal number 9 (SIGKILL)
 killall nginx                  # Kill all processes named nginx
 pkill -u hitesh                # Kill all processes by user
 
@@ -1833,7 +1883,11 @@ nohup command &                # Persist after logout
 Ctrl+Z              # suspend current foreground job
 bg                  # resume suspended job in background
 fg                  # bring background job to foreground
-disown %1            # remove job from shell's job table (keeps running after logout)
+disown %1           # remove job from shell's job table (keeps running after logout)
+
+command1 & command2 &
+wait                   # pause script until ALL background jobs finish
+wait $!                # wait for a specific PID (last backgrounded process)
 ```
 
 *kill vs pkill vs killall:*
@@ -2417,6 +2471,10 @@ if [ "$name" == "hitesh" ]; then echo "match"; fi
 # [[ ]] handles unquoted vars safely and supports regex:
 if [[ $name == "hitesh" ]]; then echo "match"; fi
 if [[ $email =~ ^[a-z]+@[a-z]+\.com$ ]]; then echo "valid email"; fi
+
+# (( )) -> arithmetic evaluation context, no need for -eq/-gt, no $ needed on vars
+if (( x > 5 )); then echo "x is greater than 5"; fi
+if (( count % 2 == 0 )); then echo "even"; fi
 ```
 
 ### if / elif / else Syntax
@@ -2563,6 +2621,17 @@ until [ -f /tmp/done.flag ]; do
     sleep 2
 done
 echo "Task completed!"
+```
+
+```bash
+# select — Interactive Menus
+select fruit in "apple" "banana" "exit"; do
+    case $fruit in
+        apple) echo "You chose apple" ;;
+        banana) echo "You chose banana" ;;
+        exit) break ;;
+    esac
+done
 ```
 
 ### continue and break
@@ -2773,6 +2842,17 @@ echo "[DEBUG] About to run: $command"
 
 ## Advanced Shell Scripting
 
+### Subshell `( )` vs Grouping `{ }`
+```bash
+(cd /tmp && rm -rf *)     # runs in a SUBSHELL — cd doesn't affect the parent shell
+{ cd /tmp && rm -rf *; }  # runs in the CURRENT shell — cd affects your session; needs trailing ;
+
+x=10
+(x=20); echo $x    # prints 10 — subshell variables don't leak out
+{ x=20; }; echo $x  # prints 20 — same shell, variable changes persist
+```
+> Interview one-liner: `()` forks a child shell (isolates variables/cd), `{}` does not.
+
 ### Functions
 
 ```bash
@@ -2981,6 +3061,12 @@ echo $((i % 2))           # remainder (used constantly for even/odd checks)
 count=$((count + 1))      # increment a variable
 ```
 Supports `+ - * / %` and parentheses for grouping. Prefer this over `let` or `expr` — no risk of word-splitting, and it's easier to read.
+> **Gotcha:** `$(( ))` only supports integers. `echo $((5/2))` gives `2`, not `2.5`.
+> For decimals, use `bc` or `awk`:
+```bash
+echo "5/2" | bc -l        # 2.50000000000000000000
+awk 'BEGIN{print 5/2}'    # 2.5
+```
 
 ### Arithmetic — let and expr
 
@@ -3312,6 +3398,13 @@ QUIT
 SQL
 ```
 
+### Process Substitution
+Lets a command's output be treated as if it were a file.
+```bash
+diff <(sort file1.txt) <(sort file2.txt)   # compare two sorted streams without temp files
+cat <(echo "a") <(echo "b")
+```
+
 ---
 
 ## Linux Directory Structure
@@ -3459,7 +3552,9 @@ systemctl get-default                  # Current boot target
 |-------------|----------------|---------|
 | 0 | `poweroff.target` | Shutdown |
 | 1 | `rescue.target` | Single-user mode |
+| 2 | `multi-user.target` | Multi-user, no networking (Debian legacy) |
 | 3 | `multi-user.target` | CLI only |
+| 4 | unused | User-definable |
 | 5 | `graphical.target` | GUI desktop |
 | 6 | `reboot.target` | Reboot |
 
