@@ -483,6 +483,16 @@ The `aws_lbc` IAM policy is scoped extremely narrowly — the `elasticloadbalanc
 
 `sts:AssumeRole` is used when a principal (an IAM user, another role) directly assumes a role, typically cross-account. `sts:AssumeRoleWithWebIdentity` is used when the caller authenticates via an external OIDC/SAML identity provider (Kubernetes' projected service-account token, Google, Facebook login, etc.) instead of native IAM credentials — this is the mechanism underlying IRSA.
 
+### What is AWS STS (Security Token Service)?
+
+STS is the service that actually issues the short-lived, temporary credentials
+(access key + secret key + session token) that back every IAM Role assumption.
+Every time something "assumes a role" — a user via `sts:AssumeRole`, a pod via
+`sts:AssumeRoleWithWebIdentity`, an EC2 instance profile — it is STS in the
+background generating those credentials, typically valid for 15 minutes to 12
+hours. This is why roles are safer than IAM user access keys: the credentials
+STS hands out expire automatically and never need to be manually rotated.
+
 ### How do an application's end users (customers) log in — is that IAM?
 
 No. IAM manages access to **AWS itself** (who can create an S3 bucket, who can deploy to
@@ -687,6 +697,7 @@ Instance types are grouped into families optimized for different workloads:
 - **Compute optimized (c)** — high CPU-to-memory ratio; batch processing, gaming servers.
 - **Memory optimized (r, x)** — high memory-to-CPU ratio; in-memory databases, caching.
 - **Storage optimized (i, d)** — high-speed local storage; data warehousing.
+- **Accelerated computing (p, g, inf)** — GPU or ML-inference-chip backed; machine learning training/inference, video rendering, HPC.
 
 **Reading an instance type name, e.g. `t3.micro`:**
 - `t` = family (general purpose, burstable)
@@ -751,6 +762,13 @@ A snapshot is a point-in-time copy of a storage volume or database, stored in S3
 the scenes. The first snapshot copies everything; every snapshot after that only stores
 what *changed* since the last one (incremental), which keeps them cheap and fast even for
 large volumes. Snapshots are how EBS backups and RDS backups both work under the hood.
+
+### What is the difference between an EBS Snapshot and an AMI?
+
+An **EBS Snapshot** is a backup of a single volume's data. An **AMI** is a bootable
+template — it includes a snapshot of the root volume plus launch metadata (architecture,
+kernel, block device mapping) needed to actually start a new EC2 instance from it. Every
+AMI relies on an underlying snapshot, but not every snapshot is bootable as an AMI.
 
 ### What are the main EBS volume types, and when do you pick each?
 
@@ -871,6 +889,18 @@ An **Internet Gateway (IGW)** is a horizontally scaled, redundant VPC component 
 
 ## EKS (Elastic Kubernetes Service)
 
+### What's the difference between a monolithic and a microservices architecture?
+
+A **monolith** is a single application where all functionality (UI, business
+logic, data access) is built and deployed as one unit — simple to start with,
+but any change requires redeploying the whole thing, and it all scales
+together even if only one part is under load. **Microservices** split the
+application into small, independently deployable services, each owning its
+own piece of functionality (and often its own database) and communicating
+over the network (HTTP/gRPC, or async via SQS/SNS). This lets teams deploy and
+scale services independently, at the cost of added operational complexity —
+which is exactly the complexity Kubernetes/EKS exists to manage.
+
 ### What is a container, in plain terms?
 
 A container packages an application with everything it needs to run (code, runtime,
@@ -878,6 +908,22 @@ libraries, config) into a single, portable unit that runs the same way anywhere 
 laptop, a CI server, or an AWS EC2 instance. Docker is the most common tool for building
 and running containers. Unlike a virtual machine, a container shares the host machine's OS
 kernel, which makes it much lighter and faster to start.
+
+### Container vs Virtual Machine — what's the actual difference?
+
+| | VM | Container |
+|---|---|---|
+| Virtualizes | Hardware (via hypervisor) | OS (shares host kernel) |
+| Includes | Full guest OS + app | Just the app + its dependencies |
+| Boot time | Minutes | Seconds (often <1s) |
+| Size | GBs | MBs |
+| Isolation | Strong (separate kernel) | Weaker (shared kernel, namespace-isolated) |
+| Density | Fewer per host | Many more per host |
+
+A VM virtualizes a whole computer, including its own OS kernel. A container virtualizes
+only at the OS level — it shares the host's kernel but gets an isolated view of processes,
+network, and filesystem. This is why containers start almost instantly and pack far more
+densely onto a single EC2 instance than VMs would.
 
 ### What is a container image vs. a running container?
 
@@ -1088,6 +1134,15 @@ It enables AES-256 encryption at rest for the underlying EBS-backed storage, aut
 
 **Multi-AZ** creates a synchronous standby replica in a different AZ purely for **high availability** — the standby is not readable, and AWS automatically fails over to it (updating the DNS endpoint) if the primary becomes unhealthy, typically within 60–120 seconds, with zero application configuration change needed. A **Read Replica** is an asynchronously replicated, independently readable copy used purely for **read scaling** (offloading read traffic) — it does not provide automatic failover by default (though it can be manually promoted), and replication lag means it may serve slightly stale data.
 
+### What is the difference between RDS Automated Backups and Manual Snapshots?
+
+**Automated Backups** run daily during a configurable backup window, retained for
+1–35 days, and enable **point-in-time recovery** (restore to any second within the
+retention window, not just backup times) — but they're deleted automatically when the
+instance is deleted (unless a final snapshot is taken). **Manual Snapshots** are taken
+on demand, kept indefinitely until you delete them, and survive instance deletion —
+used for long-term retention or a known-good checkpoint before a risky change.
+
 ### Why does this project set `multi_az = false` by default, and when should it be `true`?
 
 Multi-AZ roughly **doubles** the RDS compute/storage cost (you're paying for a fully provisioned, synchronously-replicating standby instance) and is explicitly **not covered by AWS Free Tier**. It's disabled by default to stay within free-tier cost bounds for a learning/demo environment, but should be enabled (`db_multi_az = true`) for any real production workload where downtime during an AZ failure or maintenance window is unacceptable.
@@ -1249,6 +1304,36 @@ Amazon S3 (Simple Storage Service) is object storage — you store files ("objec
 - **S3 Standard-IA / One Zone-IA** — infrequently accessed data with a retrieval fee; One Zone trades AZ redundancy for lower cost.
 - **S3 Glacier Instant/Flexible/Deep Archive** — archival storage, from millisecond to 12-hour retrieval times, at dramatically lower storage cost — used for compliance retention, backups, and cold data.
 
+### What is an S3 Lifecycle Policy?
+
+A Lifecycle Policy automatically transitions objects between storage classes or deletes
+them based on age, without manual intervention — e.g., "move to Standard-IA after 30 days,
+Glacier after 90 days, delete after 365 days." This is how the storage class table above
+actually gets applied in practice, rather than manually re-uploading objects to a cheaper
+class.
+
+### What is S3 Cross-Region Replication (CRR) vs Same-Region Replication (SRR)?
+
+Both automatically copy objects from a source bucket to a destination bucket as they're
+written, requiring versioning enabled on both buckets. **CRR** replicates to a bucket in a
+different region — used for compliance/data-residency, lower-latency access for
+geographically distant users, or disaster recovery. **SRR** replicates within the same
+region — used for aggregating logs across accounts, or maintaining a copy with different
+ownership/permissions.
+
+### What is S3 Static Website Hosting, and what is CORS?
+
+S3 can serve HTML/CSS/JS files directly as a website (no server needed) by enabling
+**Static Website Hosting** on a bucket and specifying an index/error document — useful for
+simple sites or SPAs, usually fronted by CloudFront for HTTPS (S3 website endpoints don't
+support HTTPS directly).
+
+**CORS (Cross-Origin Resource Sharing)** is a browser security rule that blocks a webpage
+from calling an API/bucket on a *different* domain unless that origin explicitly allows it.
+An S3 bucket needs a CORS configuration if a webpage hosted elsewhere (or even a different
+S3 origin) needs to fetch objects from it directly via JavaScript — otherwise the browser
+blocks the request even though the S3 permissions themselves are fine.
+
 ### What does "S3 is 99.999999999% durable" (11 nines) actually mean, and how is that different from availability?
 
 **Durability** is the probability your data is *not lost* — 11 nines means if you stored
@@ -1335,9 +1420,26 @@ HTTPS) and defines rules for what to do with them. A **Target Group** is the set
 destinations (EC2 instances, IPs, or Lambda functions) the load balancer forwards matched
 traffic to, along with the health check config used to decide if each target is healthy.
 
+### What are Sticky Sessions (Session Affinity)?
+
+By default, a load balancer spreads each request across targets independently, which
+breaks anything relying on server-local session state (e.g., an in-memory login session).
+**Sticky sessions** use a cookie to pin a given client to the same target for the duration
+of their session. It's a workaround, not a best practice — the real fix is making the
+application stateless (session data in ElastiCache/DynamoDB instead of server memory), so
+any target can serve any request.
+
 ### What's the difference between an Application Load Balancer (ALB) and a Network Load Balancer (NLB)?
 
 **ALB** operates at Layer 7 (HTTP/HTTPS) — it can route based on path, host, headers, and supports WebSocket/HTTP2, TLS termination, and integrates natively with Kubernetes `Ingress` resources. **NLB** operates at Layer 4 (TCP/UDP/TLS passthrough) — it offers ultra-low latency, can handle millions of requests per second, preserves the client's source IP by default, and is used for non-HTTP protocols or when raw performance/static IP addresses are required (NLB supports Elastic IPs per AZ; ALB does not).
+
+### What is Cross-Zone Load Balancing?
+
+Without it, each load balancer node only distributes traffic to targets in its **own** AZ,
+which can cause uneven load if AZs have unequal target counts. With it enabled, every
+load balancer node distributes evenly across **all** registered targets in **all** AZs.
+ALB has this on by default at no extra cost; NLB has it off by default, and enabling it
+incurs cross-AZ data transfer charges.
 
 ### How does a Kubernetes `Ingress` resource end up creating a real AWS ALB?
 
@@ -1420,6 +1522,32 @@ Lambda runs code in response to events (API calls, S3 uploads, queue messages, s
 
 A cold start happens when Lambda has no warm execution environment available and must provision one from scratch (download code, initialize the runtime, run any top-level/init code) before handling the invocation — adding anywhere from tens of milliseconds to several seconds of latency. Mitigations include **Provisioned Concurrency** (keeping a set number of environments pre-initialized and warm at all times, at extra cost), minimizing package size and avoiding heavy SDK initialization at the top level, choosing a lighter runtime, and using **SnapStart** (available for Java) which caches a post-initialization snapshot to restore from instead of re-running init code.
 
+### What does "idempotent" mean, and why does it matter for Lambda/SQS?
+
+An operation is idempotent if running it multiple times has the same effect as
+running it once — e.g., "set balance to $100" is idempotent; "add $10 to
+balance" is not. This matters because Lambda (on retries) and SQS Standard
+queues (at-least-once delivery) can both deliver the same event more than
+once. If a function's logic isn't idempotent, a harmless retry can cause
+duplicate charges, duplicate emails, etc. The usual fix is to track a unique
+event/message ID and skip processing if it's already been handled.
+
+### What are the three Lambda invocation types?
+
+- **Synchronous** — caller waits for a response (API Gateway, ALB); errors are returned
+  directly to the caller.
+- **Asynchronous** — caller fires and forgets (S3 events, SNS); Lambda retries automatically
+  on failure and can route repeated failures to a DLQ or Lambda destination.
+- **Poll-based** — Lambda itself polls a source (SQS, Kinesis, DynamoDB Streams) and
+  invokes synchronously per batch; scaling is tied to the number of shards/partitions
+  rather than pure concurrency.
+
+### What is a Lambda Layer?
+
+A Layer is a versioned ZIP of shared code/libraries (e.g., a common dependency, a custom
+runtime) that can be attached to multiple functions, keeping the deployment package small
+and avoiding duplicating the same dependency across every function.
+
 ### What is Lambda concurrency, and what's the difference between Reserved and Provisioned Concurrency?
 
 **Concurrency** is the number of invocations Lambda runs simultaneously. By default, all
@@ -1444,6 +1572,14 @@ processing**, but cap throughput (300 msg/sec, or 3,000/sec with batching), and 
 queue that a source queue automatically forwards messages to after they fail processing
 more than a configured number of times (`maxReceiveCount`) — preventing a single poison
 message from blocking the queue forever and giving you a place to inspect failures.
+
+### What is SQS Visibility Timeout?
+
+When a consumer receives a message, SQS doesn't delete it immediately — it becomes
+**invisible** to other consumers for a set period (default 30s) while it's being
+processed. If the consumer doesn't explicitly delete the message before the timeout
+expires (e.g., it crashed), the message reappears in the queue for another consumer to
+pick up — this is the actual mechanism behind "at-least-once delivery."
 
 ### What is Amazon Kinesis, and how is it different from SQS?
 
@@ -1573,6 +1709,14 @@ routing policies and health checks below.
 - **Failover** — active-passive; route to a primary, automatically switch to a secondary if the primary's health check fails.
 - **Geolocation / Geoproximity** — route based on the user's geographic location (compliance/data-residency requirements) or bias traffic toward specific regions.
 - **Multivalue answer** — return multiple healthy IPs, providing basic client-side load distribution and health checking without a full load balancer.
+
+### How does a Route 53 Health Check actually work?
+
+Route 53 sends automated requests (HTTP/HTTPS/TCP) to an endpoint at a configurable
+interval (default 30s) from multiple global locations, and marks it unhealthy after a
+threshold of consecutive failures. Routing policies (Failover, Multivalue, Weighted) use
+this health status to stop sending traffic to unhealthy endpoints automatically — DNS
+itself has no concept of "down" without a health check attached.
 
 ### What is the CAP theorem, and how does it relate to choosing between RDS and DynamoDB for a given workload?
 
@@ -1999,6 +2143,7 @@ AWS CodeDeploy is a fully managed deployment service that automates deploying ap
 - **Deployment types:**
   - **In-place deployment** — the application on each instance in the deployment group is stopped, the latest application revision is installed, and the new version is started and validated.
   - **Blue/green deployment** — provisions new instances or containers, installs the new application version, and reroutes traffic to them, minimizing downtime and allowing for easy rollback if needed.
+  - **Canary deployment** — routes a small percentage of traffic to the new version first, and shifts the rest over in increments once the canary looks healthy — catches bad releases with limited blast radius, versus blue/green's all-at-once cutover.
 - **Monitoring and rollback** — monitors application health during deployment and can automatically or manually stop and roll back deployments if there are errors.
 - **Centralized control** — launch and track deployment status through the CodeDeploy console or AWS CLI, providing a centralized view of deployment history and status.
 
