@@ -1,7 +1,0 @@
-[core]
-    no_scm = True
-    remote = primary
-['remote "localremote"']
-    url = /tmp/dvc-storage
-['remote "primary"']
-    url = /tmp/dvc-storage

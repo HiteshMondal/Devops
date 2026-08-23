@@ -1,9 +1,0 @@
-# /monitoring/loki/overlays/local/loki-storage-patch.yaml
-
-- op: remove
-  path: /spec/volumeClaimTemplates
-- op: add
-  path: /spec/template/spec/volumes/-
-  value:
-    name: storage
-    emptyDir: {}
