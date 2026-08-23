@@ -1,0 +1,29 @@
+services:
+  devops-app:
+    build:
+      context: ../../../app
+      dockerfile: Dockerfile
+    container_name: devops-console
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DB_PATH: /data/app.db
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      LRU_CACHE_SIZE: ${LRU_CACHE_SIZE:-128}
+      CB_FAILURE_THRESHOLD: ${CB_FAILURE_THRESHOLD:-5}
+      CB_RESET_SECONDS: ${CB_RESET_SECONDS:-30}
+    volumes:
+      - ../../../app/src:/app/src:ro
+      - devops_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  devops_data:

@@ -1,0 +1,41 @@
+# monitoring/loki/values.yaml
+#
+# Standalone `grafana/loki-stack` Helm release (bundles Loki + Promtail),
+# deployed by deploy_monitoring.sh's deploy_loki() into the ${LOKI_NAMESPACE}
+# namespace. Grafana's Loki datasource (monitoring/grafana/values.yaml.tpl)
+# and the dashboard in monitoring/dashboards/ both assume this exact release
+# shape: a Loki service reachable at loki.${LOKI_NAMESPACE}.svc.cluster.local:3100.
+#
+# No ${} placeholders — this file is passed to Helm as-is (no envsubst step),
+# same convention as node-exporter/kube-state-metrics.
+#
+# Works in both environments: ArgoCD and direct
+# Supports: Minikube · Kind · K3s · K8s · EKS · GKE · AKS · MicroK8s
+
+loki:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+  config:
+    limits_config:
+      retention_period: 168h   # 7 days — raise for prod via an overlay if needed
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 168h
+
+promtail:
+  enabled: true
+  config:
+    snippets:
+      pipelineStages:
+        - cri: {}
+
+# Loki's own Grafana subchart is disabled — Grafana is already deployed as
+# part of the kube-prometheus-stack release (see monitoring/grafana/).
+grafana:
+  enabled: false
+
+prometheus:
+  enabled: false           # loki-stack's bundled Prometheus is unused; the
+                            # cluster's Prometheus already comes from kube-prometheus-stack

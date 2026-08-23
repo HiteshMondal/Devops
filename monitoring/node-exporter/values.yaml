@@ -1,0 +1,29 @@
+# monitoring/node-exporter/values.yaml
+#
+# Standalone `prometheus-community/prometheus-node-exporter` Helm release,
+# deployed by deploy_monitoring.sh's deploy_node_exporter(). The bundled
+# subchart inside kube-prometheus-stack is disabled (see
+# monitoring/prometheus/values.yaml.tpl) to avoid a duplicate DaemonSet.
+#
+# No ${} placeholders — this file is passed to Helm as-is (no envsubst step).
+# service.type and tolerations are set directly by deploy_node_exporter() via
+# --set flags, so they're intentionally omitted here.
+#
+# Works in both environments: ArgoCD and direct
+# Supports: Minikube · Kind · K3s · K8s · EKS · GKE · AKS · MicroK8s
+
+prometheus:
+  monitor:
+    enabled: true          # creates a ServiceMonitor picked up automatically
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+extraArgs:
+  - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/pods/.+)($|/)
+  - --collector.netclass.ignored-devices=^(veth.*|docker.*|cali.*|flannel.*|cbr.*)$

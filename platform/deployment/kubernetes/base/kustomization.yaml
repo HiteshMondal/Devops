@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# /kubernetes/base/kustomization.yaml
+#
+# IMPORTANT: namespace.yaml is intentionally NOT listed here.
+# - ArgoCD mode:  namespace is created by syncOptions: CreateNamespace=true
+# - Direct mode:  namespace is created by `kubectl create namespace` in deploy_kubernetes.sh
+# Including namespace.yaml causes Kustomize to inject label selectors onto the Namespace
+# object, which Kubernetes rejects as invalid.
+#
+# IMPORTANT: secrets.yaml IS listed here (with placeholder values) even though
+# it holds sensitive data, because deploy_kubernetes.sh registers a bare
+# `patches: - path: secrets-patch.yaml` (no explicit `target:`) at deploy time.
+# Kustomize can only patch a resource that already exists in the resource
+# list, so the Secret must be present in base or `kubectl apply -k` fails.
+# In direct/script mode the placeholders are overwritten with real/random
+# values before apply. In ArgoCD/GitOps mode nothing overwrites them, so
+# swap this for a real secret manager (Sealed Secrets, External Secrets
+# Operator, SOPS, etc.) before using ArgoCD in production.
+#
+# IMPORTANT: commonLabels is intentionally NOT used here.
+# commonLabels injects label selectors onto ALL resources including Namespace and Service,
+# which breaks Namespace (rejects selectors) and locks Service selectors permanently.
+# Labels are defined directly on each resource instead.
+namespace: devops-app
+resources:
+  - configmap.yaml
+  - secrets.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - model-pvc.yaml
+images:
+  - name: devops-app
+    newName: devops-app
+    newTag: latest

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-artifacts-pvc
+  namespace: devops-app
+  labels:
+    app: devops-app
+spec:
+  # No storageClassName set on purpose — this lets the cluster's default
+  # StorageClass be used, so the same manifest works unmodified on
+  # Minikube, Kind, K3s, MicroK8s, EKS, GKE, AKS, etc.
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

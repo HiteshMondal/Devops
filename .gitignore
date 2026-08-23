@@ -1,0 +1,185 @@
+# TERRAFORM / OPENTOFU
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+.terraform/
+.tofu/
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfplan
+tfplan
+.terraformrc
+terraform.rc
+.tofurc
+
+# PULUMI
+.pulumi/
+Pulumi.*.yaml.bak
+
+# KUBERNETES
+*.tmp
+*.bak
+
+# ENVIRONMENT VARIABLES
+.env
+.env.local
+.env.*.local
+
+# IDE / EDITOR
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PYTHON
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+.venv-mlops/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+build/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# NODE
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# LOGS
+logs/
+log/
+*.log
+
+# SECRETS & CREDENTIALS
+*.pem
+*.key
+*.crt
+*.ppk
+*.secret
+secrets/
+credentials/
+credentials.json
+service-account.json
+id_rsa*
+
+# BUILD & ARCHIVES
+*.zip
+*.tar
+*.tar.gz
+*.backup
+*.old
+
+# NOTEBOOKS
+**/.ipynb_checkpoints/
+
+# MONITORING DATA (runtime-generated artifacts — never commit)
+monitoring/**/reports/
+monitoring/**/profiles/
+monitoring/**/data/
+monitoring/**/storage/
+
+# Prometheus / Grafana persistent volumes
+prometheus-data/
+grafana-data/
+
+# Evidently HTML/JSON reports fallback rule
+**/evidently/**/reports/
+
+# TEMPORARY FILES
+tmp/
+temp/
+
+# ML DATA — managed by DVC / LakeFS
+ml/data/raw/**
+ml/data/processed/**
+ml/data/interim/**
+ml/data/external/**
+ml/data/features/**
+
+# Allow DVC pointer files
+!ml/data/**/*.dvc
+
+# MODEL ARTIFACTS
+ml/models/artifacts/**
+
+# Allow lightweight metrics tracking
+!ml/models/artifacts/eval_metrics.json
+
+# COMMON MODEL FILE TYPES
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.onnx
+*.pb
+*.bin
+*.safetensors
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+.dvc/plots/
+.dvc/state
+.dvc/config.local
+
+# MLFLOW
+ml/experiments/mlflow/mlruns/
+
+# METAFLOW
+.metaflow/
+
+# LOCAL PLATFORM RUNTIME STATE
+.platform/
+
+# LAKEFS LOCAL STATE
+.lakefs/
+ml/lakefs/repositories/**
+
+# KUBEFLOW LOCAL CACHE
+.kubeflow/
+
+# FEAST LOCAL REGISTRY CACHE
+.feast/
+ml/feature_store/feast/*.db
+ml/feature_store/feast/feature_definitions.py
+ml/feature_store/feast/registry.db
+ml/feature_store/feast/online_store.db
+
+# AIRFLOW LOCAL DB
+airflow.db
+ml/pipelines/airflow/logs/
+ml/pipelines/airflow/*.db
+
+# PREFECT LOCAL STATE
+.prefect/
+ml/pipelines/prefect/.prefect/
+
+# DATA
+data

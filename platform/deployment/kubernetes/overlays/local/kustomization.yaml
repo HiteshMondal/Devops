@@ -1,0 +1,115 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# /kubernetes/overlays/local/kustomization.yaml
+# Universal Local Environment Overlay
+# Works with: Minikube, Kind, K3s, MicroK8s, and local Kubernetes clusters
+# ArgoCD-compatible: no shell variable substitution — plain Kustomize only
+#
+# NOTE: No `labels` block here — Kustomize's labels transformer also injects
+# label selectors onto resources, which causes issues on immutable fields.
+# Environment labels are applied via the Deployment patch below.
+resources:
+  - ../../base
+
+namespace: devops-app
+
+images:
+  - name: devops-app
+    newName: hiteshmondaldocker/devops-app
+    newTag: latest
+
+patches:
+  # Reduce resource requirements and tag environment for local
+  - target:
+      kind: Deployment
+      name: devops-app
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: devops-app
+        labels:
+          environment: local
+      spec:
+        replicas: 1
+        template:
+          metadata:
+            labels:
+              environment: local
+          spec:
+            containers:
+            - name: devops-app
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+
+  # Scale down HPA for local environment
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: devops-app-hpa
+    patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: devops-app-hpa
+      spec:
+        minReplicas: 1
+        maxReplicas: 3
+        metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 80
+
+  # Use NodePort for universal local access
+  - target:
+      kind: Service
+      name: devops-app-service
+    patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: devops-app-service
+        annotations:
+          servicelb.k3s.cattle.io/enable: "true"
+      spec:
+        type: NodePort
+        ports:
+        - port: 80
+          targetPort: 3000
+          nodePort: 30080
+          protocol: TCP
+          name: http
+
+  # Universal Ingress configuration for local clusters
+  - target:
+      kind: Ingress
+      name: devops-app-ingress
+    patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: devops-app-ingress
+        annotations:
+          nginx.ingress.kubernetes.io/rewrite-target: /
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+          kubernetes.io/ingress.class: nginx
+      spec:
+        ingressClassName: nginx
+        rules:
+        - host: devops-app.local
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: devops-app-service
+                  port:
+                    number: 80
