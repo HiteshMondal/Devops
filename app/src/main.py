@@ -11,13 +11,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from src.api.routes import router
-from src.core.config import get_settings
-from src.core.logging_config import configure_logging, get_logger
+from src.api import router
+from src.config import configure_logging, get_logger, get_settings
 
 configure_logging()
 logger = get_logger(__name__)
-
 settings = get_settings()
 
 app = FastAPI(
@@ -30,7 +28,6 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
-
 app.include_router(router, prefix="/api/v1")
 
 

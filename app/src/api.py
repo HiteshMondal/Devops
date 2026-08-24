@@ -1,31 +1,106 @@
-"""API routes for the DevOps console."""
+"""API layer for the DevOps console: dependency providers, request/response
+schemas, and route handlers.
+
+Centralizes construction of shared, process-wide service instances so
+routes just declare a dependency instead of instantiating services
+themselves.
+"""
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
-from src.api.dependencies import (
-    get_health_service,
-    get_monitoring_service,
-    get_rate_limiter,
-    get_scheduler,
+from src.config import (
+    CyclicDependencyError,
+    get_settings,
 )
-from src.api.schemas import (
-    DeploymentOrderOut,
-    DeploymentPlanCreate,
-    ServerCreate,
-    ServerOut,
-    TaskCreate,
-    TaskOut,
-)
-from src.core.exceptions import CyclicDependencyError
-from src.db.repository import DeploymentRepository, LogRepository, ServerRepository
-from src.models.resource import Server
-from src.models.task import Task
-from src.services.deployment_service import build_plan, topological_deploy_order
-from src.services.log_service import LogIndex
 
-router = APIRouter()
+from src.database import DeploymentRepository, LogRepository, ServerRepository
+from src.models import Server, Task
+from src.services import (
+    HealthService,
+    LogIndex,
+    MonitoringService,
+    RateLimiter,
+    TaskScheduler,
+    build_plan,
+    topological_deploy_order,
+)
+
+
+# Schemas
+
+
+class ServerCreate(BaseModel):
+    resource_id: str
+    name: str
+    cpu_cores: int = 1
+    memory_gb: int = 1
+    region: str = "local"
+
+
+class ServerOut(BaseModel):
+    id: str
+    name: str
+    cpu_cores: int
+    memory_gb: int
+    region: str
+    status: str
+
+
+class TaskCreate(BaseModel):
+    name: str
+    priority: int = Field(default=5, ge=0, le=10)
+
+
+class TaskOut(BaseModel):
+    task_id: int
+    name: str
+    priority: int
+    status: str
+
+
+class DeploymentPlanCreate(BaseModel):
+    plan_id: str
+    # service_name -> list of service names it depends on
+    services: dict[str, list[str]]
+
+
+class DeploymentOrderOut(BaseModel):
+    plan_id: str
+    order: list[str]
+
+
+# Dependency providers
+
+
+@lru_cache
+def get_scheduler() -> TaskScheduler:
+    return TaskScheduler()
+
+
+@lru_cache
+def get_monitoring_service() -> MonitoringService:
+    settings = get_settings()
+    return MonitoringService(capacity=settings.lru_cache_size)
+
+
+@lru_cache
+def get_health_service() -> HealthService:
+    settings = get_settings()
+    return HealthService(
+        failure_threshold=settings.circuit_breaker_failure_threshold,
+        reset_seconds=settings.circuit_breaker_reset_seconds,
+    )
+
+
+@lru_cache
+def get_rate_limiter() -> RateLimiter:
+    settings = get_settings()
+    return RateLimiter(requests_per_minute=settings.rate_limit_per_minute)
 
 
 def enforce_rate_limit(request: Request, limiter=Depends(get_rate_limiter)) -> None:
@@ -34,14 +109,17 @@ def enforce_rate_limit(request: Request, limiter=Depends(get_rate_limiter)) -> N
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
 
+# Routes
+
+router = APIRouter()
+
+
 @router.get("/health", tags=["meta"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# ---------------------------------------------------------------------------
 # Servers
-# ---------------------------------------------------------------------------
 
 
 @router.post("/servers", response_model=ServerOut, tags=["servers"])
@@ -103,9 +181,7 @@ def cached_server_status(server_id: str, monitoring=Depends(get_monitoring_servi
     return {"resource_id": server_id, "cached_status": monitoring.get_cached_status(server_id)}
 
 
-# ---------------------------------------------------------------------------
 # Tasks (priority-queue scheduler)
-# ---------------------------------------------------------------------------
 
 
 @router.post("/tasks", response_model=TaskOut, tags=["tasks"])
@@ -131,9 +207,7 @@ def list_pending_tasks(scheduler=Depends(get_scheduler)) -> list[TaskOut]:
     ]
 
 
-# ---------------------------------------------------------------------------
 # Deployments (graph / topological sort)
-# ---------------------------------------------------------------------------
 
 
 @router.post("/deployments/plan", response_model=DeploymentOrderOut, tags=["deployments"])
@@ -159,9 +233,7 @@ def get_deployment_plan(plan_id: str) -> dict[str, list[dict]]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Logs (binary search index)
-# ---------------------------------------------------------------------------
 
 
 @router.post("/logs/{resource_id}", tags=["logs"])

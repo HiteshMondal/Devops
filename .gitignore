@@ -113,19 +113,6 @@ grafana-data/
 tmp/
 temp/
 
-# ML DATA — managed by DVC / LakeFS
-ml/data/raw/**
-ml/data/processed/**
-ml/data/interim/**
-ml/data/external/**
-ml/data/features/**
-
-# Allow DVC pointer files
-!ml/data/**/*.dvc
-
-# MODEL ARTIFACTS
-ml/models/artifacts/**
-
 # Allow lightweight metrics tracking
 !ml/models/artifacts/eval_metrics.json
 
@@ -142,44 +129,6 @@ ml/models/artifacts/**
 *.bin
 *.safetensors
 
-# DVC
-.dvc/cache/
-.dvc/tmp/
-.dvc/plots/
-.dvc/state
-.dvc/config.local
-
-# MLFLOW
-ml/experiments/mlflow/mlruns/
-
-# METAFLOW
-.metaflow/
-
-# LOCAL PLATFORM RUNTIME STATE
-.platform/
-
-# LAKEFS LOCAL STATE
-.lakefs/
-ml/lakefs/repositories/**
-
-# KUBEFLOW LOCAL CACHE
-.kubeflow/
-
-# FEAST LOCAL REGISTRY CACHE
-.feast/
-ml/feature_store/feast/*.db
-ml/feature_store/feast/feature_definitions.py
-ml/feature_store/feast/registry.db
-ml/feature_store/feast/online_store.db
-
-# AIRFLOW LOCAL DB
-airflow.db
-ml/pipelines/airflow/logs/
-ml/pipelines/airflow/*.db
-
-# PREFECT LOCAL STATE
-.prefect/
-ml/pipelines/prefect/.prefect/
-
 # DATA
 data
+app-data
