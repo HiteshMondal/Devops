@@ -204,90 +204,6 @@ process_tpl_files() {
     shopt -u nullglob
 }
 
-deploy_evidently() {
-
-    print_subsection "Deploying Evidently (Drift Detection)"
-
-    mkdir -p "${PROJECT_ROOT}/monitoring/evidently/reports"
-
-    if command -v python3 >/dev/null 2>&1; then
-        print_step "Installing evidently (if missing)..."
-        rm -rf /tmp/devops-evidently-venv
-        python3 -m venv /tmp/devops-evidently-venv >/dev/null 2>&1
-        /tmp/devops-evidently-venv/bin/pip install --quiet "evidently==0.7.21" pandas pyyaml \
-            || print_warning "evidently pip install had issues — continuing"
-
-        print_step "Running drift detection..."
-        if /tmp/devops-evidently-venv/bin/python "${PROJECT_ROOT}/monitoring/evidently/drift_detection.py"; then
-            print_success "Evidently drift report generated"
-            print_kv "Reports dir" "${PROJECT_ROOT}/monitoring/evidently/reports"
-        else
-            print_warning "Evidently drift detection finished with warnings (no reference data yet?)"
-        fi
-    else
-        print_warning "python3 not found — skipping Evidently"
-        print_info "Install Python 3 and re-run, or run manually:"
-        print_cmd "" "python3 monitoring/evidently/drift_detection.py"
-    fi
-}
-
-deploy_whylogs() {
-    print_subsection "Running WhyLogs Profiling (Local)"
-
-    if ! command -v python3 >/dev/null 2>&1; then
-        print_warning "python3 not found — skipping WhyLogs"
-        print_info "Install Python 3 and re-run, or run manually:"
-        print_cmd "" "python3 monitoring/whylogs/whylogs.py"
-        return 0
-    fi
-
-    # whylogs supports Python 3.8–3.12; find the best available version
-    local WHYLOGS_PYTHON=""
-    local SYSTEM_PY_VER
-    SYSTEM_PY_VER=$(python3 -c 'import sys; print(sys.version_info[:2])' 2>/dev/null || echo "(0, 0)")
-
-    # Try versioned binaries first (most reliable on systems with multiple Pythons)
-    for py in python3.12 python3.11 python3.10 python3.9 python3.8; do
-        if command -v "$py" >/dev/null 2>&1; then
-            WHYLOGS_PYTHON="$py"
-            break
-        fi
-    done
-
-    # Fall back to system python3 if it is in the supported range (< 3.13)
-    if [[ -z "$WHYLOGS_PYTHON" ]]; then
-        local major minor
-        major=$(python3 -c 'import sys; print(sys.version_info.major)' 2>/dev/null || echo 0)
-        minor=$(python3 -c 'import sys; print(sys.version_info.minor)' 2>/dev/null || echo 0)
-        if [[ "$major" -eq 3 && "$minor" -le 12 ]]; then
-            WHYLOGS_PYTHON="python3"
-        fi
-    fi
-
-    if [[ -z "$WHYLOGS_PYTHON" ]]; then
-        print_warning "whylogs requires Python 3.8–3.12; detected version is not compatible"
-        print_info "Install a supported Python version or run manually with a compatible interpreter:"
-        print_cmd "" "python3.12 monitoring/whylogs/whylogs.py"
-        return 0
-    fi
-
-    print_step "Using $($WHYLOGS_PYTHON --version 2>&1) for WhyLogs..."
-    print_step "Installing whylogs (if missing)..."
-
-    "$WHYLOGS_PYTHON" -m venv /tmp/devops-whylogs-venv >/dev/null 2>&1
-    /tmp/devops-whylogs-venv/bin/pip install --quiet \
-        "whylogs==1.6.4" "numpy<2" pandas pyyaml \
-        || { print_warning "whylogs pip install had issues — skipping"; return 0; }
-
-    print_step "Generating dataset profile..."
-    if /tmp/devops-whylogs-venv/bin/python "${PROJECT_ROOT}/monitoring/whylogs/whylogs.py"; then
-        print_success "WhyLogs profile generated"
-        print_kv "Profiles dir" "${PROJECT_ROOT}/monitoring/whylogs/profiles"
-    else
-        print_warning "WhyLogs profiling finished with warnings (no data yet?)"
-    fi
-}
-
 wait_for_rollout() {
     local resource="$1"
     local namespace="$2"
@@ -354,6 +270,38 @@ resolve_k8s_service_config() {
     export MONITORING_SERVICE_TYPE
 }
 
+create_grafana_dashboards_configmap() {
+    local dashboard_dir="$1"
+    local namespace="$2"
+
+    print_step "Creating Grafana dashboard ConfigMap"
+
+    shopt -s nullglob
+    local dashboards=("$dashboard_dir"/*.json)
+
+    if [[ ${#dashboards[@]} -eq 0 ]]; then
+        print_warning "No Grafana dashboard JSON files found"
+        shopt -u nullglob
+        return 0
+    fi
+
+    local args=()
+
+    for file in "${dashboards[@]}"; do
+        args+=(--from-file="$(basename "$file")=$file")
+    done
+
+    kubectl create configmap grafana-dashboards \
+        "${args[@]}" \
+        -n "$namespace" \
+        --dry-run=client \
+        -o yaml | kubectl apply -f -
+
+    shopt -u nullglob
+
+    print_success "Grafana dashboard ConfigMap created"
+}
+
 # Main monitoring deployment
 deploy_monitoring() {
 
@@ -382,70 +330,57 @@ deploy_monitoring() {
     # PROMETHEUS
     print_subsection "Deploying Prometheus"
 
-    substitute_env_vars_to_file \
-      "$PROJECT_ROOT/monitoring/prometheus_grafana/kube-prometheus-stack-values.yaml" \
-      "/tmp/kps-values.yaml"
+    create_prometheus_configmap \
+        "$PROJECT_ROOT/monitoring/prometheus/prometheus.yml.tpl" \
+        "$namespace"
 
-    helm upgrade --install prometheus \
-      prometheus-community/kube-prometheus-stack \
-      --namespace "$namespace" \
-      --create-namespace \
-      -f /tmp/kps-values.yaml \
-      --set prometheus.service.type="$service_type" \
-      --wait \
-      --timeout 5m
+    create_alerts_configmap \
+        "$PROJECT_ROOT/monitoring/prometheus/alerts.yaml" \
+        "$namespace"
 
-    print_success "Prometheus stack ready"
+    kubectl apply \
+        -n "$namespace" \
+        -f "$PROJECT_ROOT/monitoring/prometheus/prometheus.yaml"
+
+    kubectl rollout status \
+        deployment/prometheus \
+        -n "$namespace" \
+        --timeout=300s
+
+    print_success "Prometheus ready"
 
     print_subsection "Provisioning Grafana Dashboards"
     local dashboard_dir="$PROJECT_ROOT/monitoring/dashboards"
     local namespace="${PROMETHEUS_NAMESPACE:-monitoring}"
 
-    shopt -s nullglob
-
-    for file in "$dashboard_dir"/*.json; do
-
-        local name
-        name=$(basename "$file" .json)
-
-        print_step "Registering dashboard: $name"
-
-        kubectl create configmap "grafana-dashboard-$name" \
-            --from-file="$file" \
-            -n "$namespace" \
-            --dry-run=client -o yaml | \
-        kubectl label --local -f - grafana_dashboard=1 -o yaml | \
-        kubectl apply -f -
-    done
-
-    shopt -u nullglob
-    print_success "Dashboards provisioned automatically"
+    create_grafana_dashboards_configmap \
+        "$PROJECT_ROOT/monitoring/dashboards" \
+        "$namespace"
 
     # GRAFANA
     print_subsection "Deploying Grafana"
 
-    if ! helm repo list | grep -q grafana; then
-        helm repo add grafana https://grafana.github.io/helm-charts >/dev/null
-    fi
-    helm repo update >/dev/null
+    print_step "Applying Grafana manifests..."
+
+    kubectl apply \
+        -n "$namespace" \
+        -f "$PROJECT_ROOT/monitoring/grafana/grafana.yaml"
+
+    kubectl rollout status \
+        deployment/grafana \
+        -n "$namespace" \
+        --timeout=300s
 
     GRAFANA_ADMIN_PASSWORD=$(kubectl get secret \
-      prometheus-grafana \
-      -n "$namespace" \
-      -o jsonpath="{.data.admin-password}" | base64 -d)
+        grafana-secrets \
+        -n "$namespace" \
+        -o jsonpath="{.data.admin-password}" | base64 -d)
 
     print_access_box "GRAFANA CREDENTIALS" ">" \
-      "CRED:Username:admin" \
-      "CRED:Password:${GRAFANA_ADMIN_PASSWORD}"
-    print_success "Grafana dashboards auto-provisioned from monitoring/dashboards/" ">" \
-      "NOTE:Import dashboards via ID" \
-      "SEP:" \
-      "CRED:Node Exporter Full:1860" \
-      "CRED:Kubernetes Cluster Monitoring:6417" \
-      "CRED:kube-state-metrics v2:13332" \
-      "SEP:" \
-      "NOTE:Loki logging dashboard JSON included in repo:" \
-      "CMD:monitoring/dashboards/devops-loki-dashboard.json"
+        "CRED:Username:admin" \
+        "CRED:Password:${GRAFANA_ADMIN_PASSWORD}"
+
+    print_success "Grafana ready"
 
     # NODE EXPORTER
 
@@ -457,16 +392,13 @@ deploy_monitoring() {
 
     print_success "Node Exporter ready"
 
-    print_monitoring_access prometheus-grafana "$namespace" "$GRAFANA_PORT" "Grafana"
+    print_monitoring_access grafana "$namespace" "$GRAFANA_PORT" "Grafana"
 
     PROM_SERVICE=$(kubectl get svc -n "$namespace" \
-        prometheus-kube-prometheus-prometheus \
+        prometheus \
         -o jsonpath="{.metadata.name}" 2>/dev/null || true)
 
     print_monitoring_access "$PROM_SERVICE" "$namespace" "$PROMETHEUS_PORT" "Prometheus"
-
-    deploy_evidently
-    deploy_whylogs
     
     # SUMMARY
 

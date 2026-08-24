@@ -553,9 +553,9 @@ deploy_image() {
     bash "$PROJECT_ROOT/platform/cicd/gitlab/configure_gitlab.sh"
 
     if [[ "$CONTAINER_RUNTIME" == "podman" ]]; then
-        bash "$PROJECT_ROOT/app/build_and_push_image_podman.sh"
+        bash "$PROJECT_ROOT/platform/deployment/build_and_push_image_podman.sh"
     else
-        bash "$PROJECT_ROOT/app/docker/build_and_push_image.sh"
+        bash "$PROJECT_ROOT/platform/deployment/docker/build_and_push_image.sh"
     fi
     print_success "Image build & push complete"
     print_divider

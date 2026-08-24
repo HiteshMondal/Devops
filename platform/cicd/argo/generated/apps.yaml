@@ -1,1 +1,236 @@
-apps.yaml
+# /cicd/argo/app_template.yaml
+# Processed by envsubst — values come from .env
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-app-loki
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: loki
+    environment: local
+    managed-by: argocd
+    component: logging
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  info:
+    - name: Loki Endpoint (Internal)
+      value: http://loki.loki.svc.cluster.local:3100
+    - name: Grafana Datasource URL
+      value: http://loki.loki.svc.cluster.local:3100
+    - name: Recommended Grafana Dashboard
+      value: "14055 (Loki Logs)"
+  source:
+    repoURL: https://github.com/HiteshMondal/devops.git
+    targetRevision: main
+    path: monitoring/loki/overlays/local
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: loki
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - Replace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: DaemonSet
+      jsonPointers:
+        - /spec/updateStrategy
+
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-app-monitoring
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: monitoring
+    environment: local
+    managed-by: argocd
+    component: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  info:
+    - name: Prometheus (Universal Access)
+      value: |
+        kubectl port-forward svc/prometheus 9090:9090 -n monitoring
+        Open: http://localhost:9090
+    - name: Grafana (Universal Access)
+      value: |
+        kubectl port-forward svc/grafana 3000:3000 -n monitoring
+        Open: http://localhost:3000
+    - name: Grafana Credentials
+      value: |
+        Username: admin
+        Password: <from secret or env>
+    - name: Grafana Dashboards
+      value: |
+        Node Exporter Full: 1860
+        Kubernetes Cluster: 6417
+        kube-state-metrics: 13332
+  source:
+    repoURL: https://github.com/HiteshMondal/devops.git
+    targetRevision: main
+    path: monitoring/prometheus_grafana
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true     
+      - Replace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-app-trivy
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: trivy
+    environment: local
+    managed-by: argocd
+    component: trivy
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  info:
+    - name: Trivy Metrics Endpoint
+      value: http://trivy-exporter.trivy-system.svc.cluster.local:8082/metrics
+    - name: Prometheus Target
+      value: Status → Targets → trivy-exporter
+    - name: Recommended Dashboards
+      value: |
+        Trivy Workload Vulnerabilities: 17046
+        Trivy Operator: 16337
+        Trivy Operator Overview: 21398
+  source:
+    repoURL: https://github.com/HiteshMondal/devops.git
+    targetRevision: main
+    path: monitoring/trivy
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trivy-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - Replace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-app-local
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: devops-app
+    environment: local
+    managed-by: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  info:
+    - name: Deployment Environment
+      value: local
+    - name: Namespace
+      value: devops-app
+    - name: Git Repository
+      value: https://github.com/HiteshMondal/devops.git
+    - name: Auto Sync
+      value: Enabled (prune + selfHeal)
+  source:
+    repoURL: https://github.com/HiteshMondal/devops.git
+    targetRevision: main
+    path: app/k8s/overlays/local
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devops-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - Replace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: networking.k8s.io
+      kind: Ingress
+      jsonPointers:
+        - /status    

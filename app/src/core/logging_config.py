@@ -26,7 +26,7 @@ def configure_logging() -> None:
     )
 
     root = logging.getLogger()
-    root.setLevel(settings.log_level)
+    root.setLevel(settings.log_level.upper())
     root.handlers.clear()
     root.addHandler(handler)
     _CONFIGURED = True

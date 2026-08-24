@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /platform/lib/bootstrap.sh — Load all shared libraries in correct dependency order.
+# lib/bootstrap.sh — Load all shared libraries in correct dependency order.
 # Every script in the project sources only this file.
 
 set -euo pipefail

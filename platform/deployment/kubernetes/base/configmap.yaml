@@ -6,16 +6,11 @@ metadata:
   labels:
     app: devops-app
 data:
-  APP_NAME: "devops-app"
-  APP_PORT: "3000"
   APP_ENV: "production"
-  LOG_LEVEL: "info"
-  # In-cluster Service name, NOT "localhost" — the DB runs in a different pod,
-  # so the app must reach it via a Kubernetes Service DNS name (or an
-  # external endpoint if you're using a managed DB). This must match the
-  # fallback default in deploy_kubernetes.sh's patch_overlay().
-  DB_HOST: "postgres-service"
-  DB_PORT: "5432"
-  DB_NAME: "devops_db"
-  MODEL_NAME: "baseline-v1"
-  MODEL_PATH: "/app/models/artifacts/model.pkl"
+  DB_PATH: "/data/app.db"
+  LOG_LEVEL: "INFO"
+  MAX_CONCURRENT_DEPLOYMENTS: "3"
+  RATE_LIMIT_PER_MINUTE: "60"
+  LRU_CACHE_SIZE: "128"
+  CB_FAILURE_THRESHOLD: "5"
+  CB_RESET_SECONDS: "30"

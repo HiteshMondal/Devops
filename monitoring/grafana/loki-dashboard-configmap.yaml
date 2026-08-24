@@ -1,4 +1,4 @@
-# /monitoring/prometheus_grafana/loki-dashboard-configmap.yaml
+# /monitoring/grafana/loki-dashboard-configmap.yaml
 #
 # Grafana dashboard ConfigMap for the DevOps Loki logging dashboard.
 # Loaded by Grafana at startup via static provisioning (volumeMount in grafana.yaml).

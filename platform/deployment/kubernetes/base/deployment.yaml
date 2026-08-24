@@ -7,7 +7,7 @@ metadata:
     app: devops-app
     version: v1
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -22,143 +22,78 @@ spec:
         app: devops-app
         version: v1
       annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "3000"
-        prometheus.io/path: "/metrics"
-        prometheus.io/scheme: "http"
+        prometheus.io/scrape: "false"
     spec:
       serviceAccountName: devops-app-sa
+
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
+
       containers:
-      - name: devops-app
-        image: hiteshmondaldocker/devops-app:latest
-        # IfNotPresent is the safe universal default: it works unmodified on
-        # Minikube/Kind (where the image is built + loaded locally, not
-        # pushed to a registry) as well as on remote clusters. deploy_kubernetes.sh
-        # still forces "Always" for prod in direct/script mode via
-        # imagepull-patch.yaml, but that patch never runs under ArgoCD/GitOps —
-        # so the prod overlay should also set imagePullPolicy: Always
-        # explicitly in its Deployment patch to stay correct in both modes.
-        imagePullPolicy: IfNotPresent
-        ports:
-        - name: http
-          containerPort: 3000
-          protocol: TCP
-        env:
-        - name: APP_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: APP_NAME
-        - name: APP_PORT
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: APP_PORT
-        - name: APP_ENV
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: APP_ENV
-        - name: LOG_LEVEL
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: LOG_LEVEL
-        - name: DB_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: DB_HOST
-        - name: DB_PORT
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: DB_PORT
-        - name: DB_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: DB_NAME
-        - name: MODEL_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: MODEL_NAME
-        - name: MODEL_PATH
-          valueFrom:
-            configMapKeyRef:
-              name: devops-app-config
-              key: MODEL_PATH
-        - name: DB_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: devops-app-secrets
-              key: DB_USERNAME
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: devops-app-secrets
-              key: DB_PASSWORD
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: devops-app-secrets
-              key: JWT_SECRET
-        - name: API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: devops-app-secrets
-              key: API_KEY
-        - name: SESSION_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: devops-app-secrets
-              key: SESSION_SECRET
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        volumeMounts:
-        - name: model-artifacts
-          mountPath: /app/models/artifacts
-          readOnly: true
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          successThreshold: 1
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          successThreshold: 1
-          failureThreshold: 3
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
-          runAsNonRoot: true
-          runAsUser: 1000
-          capabilities:
-            drop:
-            - ALL
+        - name: devops-app
+          image: hiteshmondaldocker/devops-app:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: devops-app-config
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+          volumeMounts:
+            - name: app-data
+              mountPath: /data
+
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+
       volumes:
-      - name: model-artifacts
-        persistentVolumeClaim:
-          claimName: model-artifacts-pvc
+        - name: app-data
+          persistentVolumeClaim:
+            claimName: app-data-pvc
 ---
 apiVersion: v1
 kind: ServiceAccount

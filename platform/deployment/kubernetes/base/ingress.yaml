@@ -6,27 +6,17 @@ metadata:
   labels:
     app: devops-app
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-  # NOTE: no cert-manager.io/cluster-issuer here — this base has no `tls:`
-  # block, so a cluster-issuer annotation would be a no-op. TLS + issuer
-  # annotations are added by whichever overlay actually enables TLS
-  # (see overlays/prod/kustomization.yaml).
 spec:
   ingressClassName: nginx
   rules:
-  - host: devops-app.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: devops-app-service
-            port:
-              number: 80
-  # Uncomment for TLS
-  # tls:
-  # - hosts:
-  #   - devops-app.local
-  #   secretName: devops-app-tls
+    - host: devops-app.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devops-app-service
+                port:
+                  number: 80

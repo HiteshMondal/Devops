@@ -25,12 +25,12 @@ kind: Kustomization
 namespace: devops-app
 resources:
   - configmap.yaml
-  - secrets.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml
   - hpa.yaml
-  - model-pvc.yaml
+  - app-data-pvc.yaml
+  - secrets.yaml
 images:
   - name: devops-app
     newName: devops-app

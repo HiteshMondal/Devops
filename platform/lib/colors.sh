@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# platform/lib/colors.sh — Terminal color & style definitions
+# lib/colors.sh — Terminal color & style definitions
 
 if [[ -t 1 ]]; then
     # Reset

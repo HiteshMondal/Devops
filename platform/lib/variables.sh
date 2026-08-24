@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /platform/lib/defaults.sh — Centralised default variable assignments
+# lib/defaults.sh — Centralised default variable assignments
 # Source this after loading .env so .env values take precedence.
 # All variables use := (set only if unset or empty).
 
