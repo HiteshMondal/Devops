@@ -20,16 +20,37 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
 fi
 
 readonly PROJECT_ROOT
-source "${PROJECT_ROOT}/platform/lib/bootstrap.sh"
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 CI_MODE="$(detect_ci_mode)"
+
+#  PROMETHEUS / GRAFANA 
+: "${PROMETHEUS_ENABLED:=true}"
+: "${PROMETHEUS_NAMESPACE:=monitoring}"
+: "${PROMETHEUS_SCRAPE_INTERVAL:=15s}"
+: "${PROMETHEUS_SCRAPE_TIMEOUT:=10s}"
+: "${PROMETHEUS_RETENTION:=15d}"
+: "${PROMETHEUS_STORAGE_SIZE:=10Gi}"
+: "${PROMETHEUS_CPU_REQUEST:=200m}"
+: "${PROMETHEUS_CPU_LIMIT:=500m}"
+: "${PROMETHEUS_MEMORY_REQUEST:=256Mi}"
+: "${PROMETHEUS_MEMORY_LIMIT:=512Mi}"
+: "${PROMETHEUS_PORT:=9090}"
+: "${GRAFANA_ENABLED:=true}"
+: "${GRAFANA_PORT:=3000}"
+: "${GRAFANA_ADMIN_USER:=admin}"
+: "${GRAFANA_ADMIN_PASSWORD:=admin}"
+: "${GRAFANA_STORAGE_SIZE:=5Gi}"
+: "${GRAFANA_CPU_REQUEST:=100m}"
+: "${GRAFANA_CPU_LIMIT:=200m}"
+: "${GRAFANA_MEMORY_REQUEST:=128Mi}"
+: "${GRAFANA_MEMORY_LIMIT:=256Mi}"
 
 # YAML processing
 substitute_env_vars() {
     local file=$1
     local temp_file="${file}.tmp"
-
-    export_template_vars
 
     envsubst < "$file" > "$temp_file"
 
@@ -47,8 +68,6 @@ substitute_env_vars_to_file() {
     local src="$1"
     local dst="$2"
     local temp_file="${dst}.tmp"
-
-    export_template_vars
 
     envsubst < "$src" > "$temp_file"
 
@@ -141,8 +160,6 @@ create_prometheus_configmap() {
 
     print_step "Creating Prometheus ConfigMap"
 
-    export_template_vars
-
     local temp_config="/tmp/prometheus-config-$$.yml"
     envsubst < "$prometheus_yml" > "$temp_config"
 
@@ -167,8 +184,6 @@ create_alerts_configmap() {
     local namespace="$2"
 
     print_step "Creating Prometheus Alerts ConfigMap"
-
-    export_template_vars
 
     local temp_alerts="/tmp/alerts-$$.yml"
     envsubst < "$alerts_yml" > "$temp_alerts"
@@ -210,14 +225,57 @@ wait_for_rollout() {
     kubectl rollout status "$resource" -n "$namespace" --timeout=300s
 }
 
+detect_k8s_distribution() {
+    if [[ -n "${K8S_DISTRIBUTION:-}" ]]; then
+        export K8S_DISTRIBUTION
+        return 0
+    fi
+
+    local context
+    context="$(kubectl config current-context 2>/dev/null || true)"
+
+    case "$context" in
+        minikube)
+            K8S_DISTRIBUTION="minikube"
+            ;;
+        kind-*)
+            K8S_DISTRIBUTION="kind"
+            ;;
+        k3s-*)
+            K8S_DISTRIBUTION="k3s"
+            ;;
+        microk8s)
+            K8S_DISTRIBUTION="microk8s"
+            ;;
+        *)
+            # Detect common managed Kubernetes distributions
+            if kubectl get nodes \
+                -o jsonpath='{.items[0].metadata.labels}' 2>/dev/null \
+                | grep -q 'eks.amazonaws.com'; then
+                K8S_DISTRIBUTION="eks"
+            elif kubectl get nodes \
+                -o jsonpath='{.items[0].metadata.labels}' 2>/dev/null \
+                | grep -q 'cloud.google.com/gke'; then
+                K8S_DISTRIBUTION="gke"
+            elif kubectl get nodes \
+                -o jsonpath='{.items[0].metadata.labels}' 2>/dev/null \
+                | grep -q 'kubernetes.azure.com'; then
+                K8S_DISTRIBUTION="aks"
+            else
+                K8S_DISTRIBUTION="k8s"
+            fi
+            ;;
+    esac
+
+    export K8S_DISTRIBUTION
+    print_success "Kubernetes distribution: ${K8S_DISTRIBUTION}"
+}
+
 print_monitoring_access() {
     local svc="$1"
     local namespace="$2"
     local port="$3"
     local label="$4"
-
-    detect_k8s_distribution
-
     local node_port=""
     local node_ip=""
     node_port=$(kubectl get svc "$svc" -n "$namespace" \
@@ -308,9 +366,8 @@ deploy_monitoring() {
     print_section "Deploy Monitoring Stack"
 
     require_command kubectl
-    setup_helm
-
     detect_k8s_distribution
+    setup_helm
     resolve_k8s_service_config
 
     local namespace="${PROMETHEUS_NAMESPACE:-monitoring}"

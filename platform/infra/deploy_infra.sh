@@ -18,15 +18,8 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
 fi
 readonly PROJECT_ROOT
 
-# Load bootstrap helpers
-BOOTSTRAP="${PROJECT_ROOT}/platform/lib/bootstrap.sh"
-if [[ ! -f "$BOOTSTRAP" ]]; then
-    echo "ERROR: bootstrap.sh not found at $BOOTSTRAP"
-    exit 1
-fi
-
-# shellcheck source=/dev/null
-source "$BOOTSTRAP"
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 # Load .env safely
 ENV_FILE="${PROJECT_ROOT}/.env"

@@ -1,41 +1,32 @@
-"""Application entrypoint.
-
-Run locally with:
-    uvicorn src.main:app --reload --port 8000
-
-Run in the container with:
-    uvicorn src.main:app --host 0.0.0.0 --port 8000
-"""
-
-from __future__ import annotations
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from src.api import router
-from src.config import configure_logging, get_logger, get_settings
+from src.api import router as api_router
+from src.config import settings
+from src.database import init_db
 
-configure_logging()
-logger = get_logger(__name__)
-settings = get_settings()
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
-app = FastAPI(
-    title=settings.app_name,
-    description=(
-        "DevOps console demonstrating core DSA (priority queue, LRU cache, "
-        "topological sort, binary search), OOP (abstraction, inheritance, "
-        "polymorphism, design patterns), basic system design (rate limiting, "
-        "circuit breaker, singleton config) and SQL (SQLite persistence)."
-    ),
-    version="0.1.0",
+app = FastAPI(title=settings.app_name)
+
+app.mount(
+    "/static",
+    StaticFiles(directory=STATIC_DIR),
+    name="static",
 )
-app.include_router(router, prefix="/api/v1")
+
+app.include_router(api_router)
 
 
 @app.on_event("startup")
 def on_startup() -> None:
-    logger.info("Starting %s in %s environment", settings.app_name, settings.env)
+    init_db()
 
 
 @app.get("/")
-def root() -> dict[str, str]:
-    return {"service": settings.app_name, "status": "running"}
+def index():
+    return FileResponse(STATIC_DIR / "index.html")

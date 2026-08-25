@@ -18,9 +18,8 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
 fi
 export PROJECT_ROOT
 
-source "${PROJECT_ROOT}/platform/lib/bootstrap.sh"
-
-load_env_if_needed
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 # Defaults
 : "${LOKI_ENABLED:=true}"
@@ -29,6 +28,13 @@ load_env_if_needed
 : "${LOKI_RETENTION_PERIOD:=168h}"
 : "${LOKI_PORT:=3100}"
 : "${DEPLOY_TARGET:=local}"
+: "${LOKI_STORAGE_SIZE:=10Gi}"
+: "${LOKI_SERVICE_TYPE:=ClusterIP}"
+: "${LOKI_CPU_REQUEST:=100m}"
+: "${LOKI_CPU_LIMIT:=1000m}"
+: "${LOKI_MEMORY_REQUEST:=256Mi}"
+: "${LOKI_MEMORY_LIMIT:=1Gi}"
+
 
 # Delete the Loki StatefulSet and block until the object AND its pods are gone
 _delete_loki_statefulset_and_wait() {
@@ -127,6 +133,52 @@ verify_loki_endpoint() {
     if [[ "$ready" == "true" ]]; then
         print_success "Loki HTTP endpoint confirmed reachable"
     fi
+}
+
+detect_k8s_distribution() {
+    if [[ -n "${K8S_DISTRIBUTION:-}" ]]; then
+        export K8S_DISTRIBUTION
+        return 0
+    fi
+
+    local context
+    context="$(kubectl config current-context 2>/dev/null || true)"
+
+    case "$context" in
+        minikube)
+            K8S_DISTRIBUTION="minikube"
+            ;;
+        kind-*)
+            K8S_DISTRIBUTION="kind"
+            ;;
+        k3s-*)
+            K8S_DISTRIBUTION="k3s"
+            ;;
+        microk8s)
+            K8S_DISTRIBUTION="microk8s"
+            ;;
+        *)
+            # Detect common managed Kubernetes distributions
+            if kubectl get nodes \
+                -o jsonpath='{.items[0].metadata.labels}' 2>/dev/null \
+                | grep -q 'eks.amazonaws.com'; then
+                K8S_DISTRIBUTION="eks"
+            elif kubectl get nodes \
+                -o jsonpath='{.items[0].metadata.labels}' 2>/dev/null \
+                | grep -q 'cloud.google.com/gke'; then
+                K8S_DISTRIBUTION="gke"
+            elif kubectl get nodes \
+                -o jsonpath='{.items[0].metadata.labels}' 2>/dev/null \
+                | grep -q 'kubernetes.azure.com'; then
+                K8S_DISTRIBUTION="aks"
+            else
+                K8S_DISTRIBUTION="k8s"
+            fi
+            ;;
+    esac
+
+    export K8S_DISTRIBUTION
+    print_success "Kubernetes distribution: ${K8S_DISTRIBUTION}"
 }
 
 # Main deployment

@@ -25,7 +25,8 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
 fi
 readonly PROJECT_ROOT
 
-source "${PROJECT_ROOT}/lib/bootstrap.sh"
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 # ─
 # LOAD .env

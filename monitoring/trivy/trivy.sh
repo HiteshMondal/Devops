@@ -18,9 +18,8 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
 fi
 readonly PROJECT_ROOT
 
-source "${PROJECT_ROOT}/platform/lib/bootstrap.sh"
-
-load_env_if_needed
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 # Required
 : "${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME in .env}"
@@ -36,6 +35,15 @@ load_env_if_needed
 : "${PROMETHEUS_PORT:=9090}"
 : "${PROMETHEUS_NAMESPACE:=monitoring}"
 : "${SCAN_INTERVAL:=300}"
+: "${TRIVY_CPU_REQUEST:=500m}"
+: "${TRIVY_CPU_LIMIT:=2000m}"
+: "${TRIVY_MEMORY_REQUEST:=512Mi}"
+: "${TRIVY_MEMORY_LIMIT:=2Gi}"
+: "${TRIVY_METRICS_ENABLED:=true}"
+: "${TRIVY_BUILD_IMAGES:=true}"
+: "${TRIVY_IMAGE_TAG:=1.0}"
+: "${TRIVY_METRICS_PORT:=8082}"
+
 
 # BUILD & PUSH IMAGES
 build_trivy_images() {

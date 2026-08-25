@@ -6,7 +6,8 @@
 if [[ -z "${PROJECT_ROOT:-}" ]]; then
     PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
-source "${PROJECT_ROOT}/platform/lib/bootstrap.sh"
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 configure_gitlab () {
     echo ""

@@ -29,9 +29,8 @@ BASE_DIR="${K8S_DIR}/base"
 OVERLAYS_DIR="${K8S_DIR}/overlays"
 
 # shellcheck source=/dev/null
-source "${PROJECT_ROOT}/platform/lib/bootstrap.sh"
-
-load_env_if_needed
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 environment="${1:-local}"
 
@@ -281,6 +280,61 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
+
+# KUBERNETES DETECTION
+
+detect_k8s_distribution() {
+
+    if [[ -n "${K8S_DISTRIBUTION:-}" ]]; then
+        return 0
+    fi
+
+    local context 
+    local dist="kubernetes"
+
+    context="$(kubectl config current-context 2>/dev/null || echo "")"
+
+    if kubectl get nodes -o json 2>/dev/null |
+        grep -q '"minikube.k8s.io/version"'; then
+
+        dist="minikube"
+
+    elif [[ "$context" == *"kind"* ]] ||
+         kubectl get nodes --no-headers 2>/dev/null |
+         grep -q "kind-control-plane"; then
+
+        dist="kind"
+
+    elif kubectl get nodes -o json 2>/dev/null |
+        grep -q '"eks.amazonaws.com"'; then
+
+        dist="eks"
+
+    elif kubectl get nodes -o json 2>/dev/null |
+        grep -q '"cloud.google.com/gke"'; then
+
+        dist="gke"
+
+    elif kubectl get nodes -o json 2>/dev/null |
+        grep -q '"kubernetes.azure.com"'; then
+
+        dist="aks"
+
+    elif kubectl get nodes -o json 2>/dev/null |
+        grep -q '"k3s.io"'; then
+
+        dist="k3s"
+
+    elif kubectl get nodes -o json 2>/dev/null |
+        grep -q '"microk8s.io"'; then
+
+        dist="microk8s"
+
+    fi
+
+    export K8S_DISTRIBUTION="$dist"
+    export K8S_CONTEXT="$context"
+}
 
 # Deploy to Kubernetes
 deploy() {

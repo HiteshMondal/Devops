@@ -13,7 +13,8 @@ fi
 readonly PROJECT_ROOT
 export PROJECT_ROOT
 
-source "${PROJECT_ROOT}/platform/lib/bootstrap.sh"
+source "${PROJECT_ROOT}/platform/lib/colors.sh"
+source "${PROJECT_ROOT}/platform/lib/logging.sh"
 
 ARGOCD_SERVER=""
 ARGOCD_ADMIN_PASS=""
@@ -30,6 +31,18 @@ fi
 : "${GIT_REPO_PATH_LOKI:=monitoring/Loki}"
 : "${GIT_REPO_PATH_TRIVY:=monitoring/trivy}"
 : "${DEPLOY_TARGET:?DEPLOY_TARGET must be set by run.sh}"
+
+#  ARGO
+: "${ARGOCD_NAMESPACE:=argocd}"
+: "${ARGOCD_VERSION:=v2.10.0}"
+: "${ARGOCD_ADMIN_PASSWORD:=}"
+: "${DEPLOY_TARGET:=local}"
+: "${NAMESPACE:=devops-app}"
+: "${APP_NAME:=devops-app}"
+: "${PROMETHEUS_NAMESPACE:=monitoring}"
+: "${LOKI_NAMESPACE:=loki}"
+: "${ARGOCD_SYNC_WAVE_ENABLED:=true}"
+: "${ARGOCD_LOCAL_PORT:=8080}"
 
 export ARGOCD_NAMESPACE ARGOCD_VERSION DEPLOY_TARGET NAMESPACE APP_NAME
 export PROMETHEUS_NAMESPACE LOKI_NAMESPACE TRIVY_NAMESPACE

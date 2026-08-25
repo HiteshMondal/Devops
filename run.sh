@@ -28,12 +28,6 @@ fi
 source "$PROJECT_ROOT/platform/lib/colors.sh"
 source "$PROJECT_ROOT/platform/lib/logging.sh"
 
-[[ -f "$PROJECT_ROOT/scripts/install.sh" ]] || \
-    print_warning "Installer script missing"
-
-[[ -f "$PROJECT_ROOT/scripts/reset.sh" ]] || \
-    print_warning "Reset script missing"
-
 # ENV FILE VALIDATION
 ENV_FILE="$PROJECT_ROOT/.env"
 
@@ -50,11 +44,13 @@ set +a
 # INTERNAL HELPERS
 
 # Draw a numbered menu and return the chosen number in $REPLY
-# Usage: _menu "Title" "opt1" "opt2" ...  → sets REPLY
+# Usage: _menu "Title" "opt1" "opt2" ...
 _menu() {
-    local title="$1"; shift
+    local title="$1"
+    shift
+
     local options=("$@")
-    local n=${#options[@]}
+
     echo ""
     echo -e "  ${BOLD}${BRIGHT_CYAN}┌  ${title}${RESET}"
 
@@ -65,7 +61,9 @@ _menu() {
         local desc=""
         [[ "$opt" == *"|"* ]] && desc="${opt#*|}"
 
-        printf "  ${BOLD}${BRIGHT_CYAN}│${RESET}  ${BOLD}${YELLOW}%2d)${RESET}  ${BOLD}${BRIGHT_WHITE}%-30s${RESET}" "$i" "$label"
+        printf "  ${BOLD}${BRIGHT_CYAN}│${RESET}  ${BOLD}${YELLOW}%2d)${RESET}  ${BOLD}${BRIGHT_WHITE}%-30s${RESET}" \
+            "$i" "$label"
+
         [[ -n "$desc" ]] && printf "${DIM}%s${RESET}" "$desc"
         echo ""
         i=$((i + 1))
@@ -86,8 +84,8 @@ _prompt_choice() {
         read -r REPLY
         REPLY="${REPLY:-$default}"
 
-        if [[ "$REPLY" =~ ^[0-9]+$ ]] && \
-           [[ "$REPLY" -ge 1 ]] && \
+        if [[ "$REPLY" =~ ^[0-9]+$ ]] &&
+           [[ "$REPLY" -ge 1 ]] &&
            [[ "$REPLY" -le "$max" ]]; then
             return 0
         fi
@@ -116,18 +114,8 @@ _ask_yn() {
     [[ "${_yn,,}" == "y" ]]
 }
 
-# Print a toggle row for the summary table
-_row() {
-    local label="$1"
-    local value="$2"
-    if [[ "$value" == "true" ]]; then
-        printf "  ${BOLD}${BRIGHT_CYAN}│${RESET}  ${DIM}%-28s${RESET}  ${BOLD}${BG_GREEN}${BRIGHT_WHITE} YES ${RESET}\n" "$label"
-    else
-        printf "  ${BOLD}${BRIGHT_CYAN}│${RESET}  ${DIM}%-28s${RESET}  ${DIM}${BG_DARK} no  ${RESET}\n" "$label"
-    fi
-}
+# COMPONENT FLAGS
 
-# COMPONENT FLAGS DEFAULTS
 ENABLE_INFRA=false
 ENABLE_IMAGE=false
 ENABLE_ARGO=false
@@ -198,16 +186,100 @@ select_environment() {
         1)
             DEPLOY_TARGET="local"
             ;;
+
         2)
             DEPLOY_TARGET="prod"
             ;;
     esac
 
     export DEPLOY_TARGET
+
     print_success "Environment selected: ${BOLD}${DEPLOY_TARGET^^}${RESET}"
 }
 
-# STEP 2 — CLOUD PROVIDER (only when infra is needed — called lazily)
+# STEP 2 — ENVIRONMENT SERVICE PROFILE
+
+configure_environment() {
+
+    # Reset all service flags
+    ENABLE_INFRA=false
+    ENABLE_IMAGE=false
+    ENABLE_ARGO=false
+    ENABLE_KUBERNETES=false
+    ENABLE_MONITORING=false
+    ENABLE_LOKI=false
+    ENABLE_TRIVY=false
+
+    case "$DEPLOY_TARGET" in
+
+        local)
+            # Local platform
+            ENABLE_IMAGE=true
+            ENABLE_KUBERNETES=true
+            ENABLE_MONITORING=true
+            ENABLE_LOKI=true
+            ENABLE_TRIVY=true
+            ;;
+
+        prod)
+            # Production platform
+            ENABLE_INFRA=true
+            ENABLE_IMAGE=true
+            ENABLE_ARGO=true
+            ENABLE_KUBERNETES=true
+            ENABLE_MONITORING=true
+            ENABLE_LOKI=true
+            ENABLE_TRIVY=true
+            ;;
+
+        *)
+            print_error "Unsupported deployment environment: ${DEPLOY_TARGET}"
+            exit 1
+            ;;
+
+    esac
+
+    export ENABLE_INFRA
+    export ENABLE_IMAGE
+    export ENABLE_ARGO
+    export ENABLE_KUBERNETES
+    export ENABLE_MONITORING
+    export ENABLE_LOKI
+    export ENABLE_TRIVY
+
+    print_section "Environment Configuration"
+
+    if [[ "$DEPLOY_TARGET" == "local" ]]; then
+
+        print_info "Local environment services:"
+        print_success "Container Image"
+        print_success "Kubernetes Application"
+        print_success "Prometheus + Grafana"
+        print_success "Loki Logging"
+        print_success "Trivy Security Scan"
+
+        print_info "Disabled for local:"
+        print_info "Argo CD"
+        print_info "Cloud Infrastructure"
+
+    else
+
+        print_info "Production environment services:"
+        print_success "Cloud Infrastructure"
+        print_success "Container Image"
+        print_success "Argo CD"
+        print_success "Kubernetes Application"
+        print_success "Prometheus + Grafana"
+        print_success "Loki Logging"
+        print_success "Trivy Security Scan"
+
+    fi
+
+    print_success "Environment service configuration complete"
+}
+
+# STEP 3 — CLOUD PROVIDER
+# Only required for production infrastructure.
 
 select_cloud_provider() {
 
@@ -219,9 +291,19 @@ select_cloud_provider() {
     _prompt_choice 1 3
 
     case "$REPLY" in
-        1) CLOUD_PROVIDER="aws" ;;
-        2) CLOUD_PROVIDER="oci" ;;
-        3) CLOUD_PROVIDER="azure" ;;
+
+        1)
+            CLOUD_PROVIDER="aws"
+            ;;
+
+        2)
+            CLOUD_PROVIDER="oci"
+            ;;
+
+        3)
+            CLOUD_PROVIDER="azure"
+            ;;
+
     esac
 
     export CLOUD_PROVIDER
@@ -229,163 +311,8 @@ select_cloud_provider() {
     print_success "Cloud provider selected: ${BOLD}${CLOUD_PROVIDER^^}${RESET}"
 }
 
-# STEP 3 — DEPLOYMENT MODE
-
-select_components() {
-
-    ENABLE_INFRA=false
-    ENABLE_IMAGE=false
-    ENABLE_ARGO=false
-    ENABLE_KUBERNETES=false
-    ENABLE_MONITORING=false
-    ENABLE_LOKI=false
-    ENABLE_TRIVY=false
-
-    print_section "Select Deployment Components"
-
-    if [[ "$DEPLOY_TARGET" == "prod" ]]; then
-
-        options=(
-            "Full Platform"
-            "Infrastructure Only"
-            "Image Only"
-            "ArgoCD Only"
-            "Kubernetes Stack"
-            "Monitoring Stack"
-            "App + Monitoring"
-            "Custom Selection"
-        )
-
-    else
-
-        options=(
-            "Full Platform"
-            "Image Only"
-            "Kubernetes Stack"
-            "Monitoring Stack"
-            "App + Monitoring"
-            "Custom Selection"
-        )
-
-    fi
-
-    _menu "Deployment Mode" "${options[@]}"
-    _prompt_choice 1 "${#options[@]}"
-
-    _apply_component_profile "$REPLY"
-}
-
-# COMPONENT PROFILE ENGINE
-_apply_component_profile() {
-
-    case "$DEPLOY_TARGET:$1" in
-
-        prod:1)
-            ENABLE_INFRA=true
-            ENABLE_IMAGE=true
-            ENABLE_ARGO=true
-            ENABLE_KUBERNETES=true
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
-
-        prod:2) ENABLE_INFRA=true ;;
-
-        prod:3) ENABLE_IMAGE=true ;;
-
-        prod:4) ENABLE_ARGO=true ;;
-
-        prod:5)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ;;
-
-        prod:6)
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
-
-        prod:7)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
-
-        prod:8)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ;;
-
-        prod:9) _custom_component_selection ;;
-
-        local:1)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
-
-        local:2) ENABLE_IMAGE=true ;;
-
-        local:3)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ;;
-
-        local:4)
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
-
-        local:5)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
-
-        local:6)
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ;;
-
-        local:7) _custom_component_selection ;;
-
-        *)
-            print_error "Invalid component selection"
-            exit 1
-            ;;
-    esac
-}
-
-
-# CUSTOM COMPONENT SELECTION
-
-_custom_component_selection() {
-
-    echo ""
-    print_section "Custom Component Selection"
-
-    [[ "$DEPLOY_TARGET" == "prod" ]] && \
-        _ask_yn "Provision infrastructure?" "n" && ENABLE_INFRA=true
-
-    _ask_yn "Build container image?" "n" && ENABLE_IMAGE=true
-    _ask_yn "Deploy ArgoCD?" "n" && ENABLE_ARGO=true
-    _ask_yn "Deploy Kubernetes app?" "n" && ENABLE_KUBERNETES=true
-    _ask_yn "Deploy monitoring stack?" "n" && ENABLE_MONITORING=true
-    _ask_yn "Deploy Loki logging?" "n" && ENABLE_LOKI=true
-    _ask_yn "Run Trivy scan?" "n" && ENABLE_TRIVY=true
-}
-
-
-# STEP 4 — INFRA ACTION  (only when ENABLE_INFRA=true)
+# STEP 4 — INFRA ACTION
+# Only required for production infrastructure.
 
 select_infra_action() {
 
@@ -397,14 +324,24 @@ select_infra_action() {
     _prompt_choice 1 3
 
     case "$REPLY" in
-        1) INFRA_ACTION="plan" ;;
-        2) INFRA_ACTION="apply" ;;
-        3) INFRA_ACTION="destroy" ;;
+
+        1)
+            INFRA_ACTION="plan"
+            ;;
+
+        2)
+            INFRA_ACTION="apply"
+            ;;
+
+        3)
+            INFRA_ACTION="destroy"
+            ;;
+
     esac
 
     export INFRA_ACTION
 
-    if [[ "$INFRA_ACTION" == destroy ]]; then
+    if [[ "$INFRA_ACTION" == "destroy" ]]; then
 
         print_warning "Destroy will permanently delete infrastructure."
 
@@ -416,73 +353,24 @@ select_infra_action() {
     print_success "Infra action: ${INFRA_ACTION^^}"
 }
 
-
-# DEPENDENCY ENFORCEMENT
-
-_enforce_dependencies() {
-
-    print_section "Resolving Dependencies"
-
-    if [[ "$DEPLOY_TARGET" != prod ]]; then
-        ENABLE_INFRA=false
-        ENABLE_ARGO=false
-    fi
-
-    if [[ "$ENABLE_MONITORING" == true ||
-          "$ENABLE_LOKI" == true ||
-          "$ENABLE_TRIVY" == true ]]; then
-
-        ENABLE_KUBERNETES=true
-    fi
-
-    if [[ "$ENABLE_KUBERNETES" == true ]]; then
-        ENABLE_IMAGE=true
-    fi
-
-    print_success "Dependency resolution complete"
-}
-
-# DEPLOYMENT PLAN SUMMARY
-
-_show_plan() {
-    echo ""
-    echo -e "  ${BOLD}${BRIGHT_CYAN}||==============================================||${RESET}"
-    echo -e "  ${BOLD}${BRIGHT_CYAN}||        DEPLOYMENT PLAN SUMMARY              ||${RESET}"
-    echo -e "  ${BOLD}${BRIGHT_CYAN}||==============================================||${RESET}"
-
-    local env_color
-    [[ "$DEPLOY_TARGET" == "prod" ]] && env_color="$YELLOW" || env_color="$GREEN"
-
-    printf "  ${BOLD}${BRIGHT_CYAN}||${RESET}  ${DIM}%-28s${RESET}  ${BOLD}%b%-10s%b${RESET}\n" \
-        "Environment" "$env_color" "${DEPLOY_TARGET^^}" "$RESET"
-
-    if [[ "$ENABLE_INFRA" == true ]]; then
-        printf "  ${BOLD}${BRIGHT_CYAN}||${RESET}  ${DIM}%-28s${RESET}  ${BOLD}${BRIGHT_WHITE}%-10s${RESET}\n" \
-            "Cloud Provider" "${CLOUD_PROVIDER^^}"
-        printf "  ${BOLD}${BRIGHT_CYAN}||${RESET}  ${DIM}%-28s${RESET}  ${BOLD}${BRIGHT_WHITE}%-10s${RESET}\n" \
-            "Infra Action" "${INFRA_ACTION^^}"
-    fi
-
-    echo -e "  ${BOLD}${BRIGHT_CYAN}||==============================================||${RESET}"
-
-    _row "Infrastructure"         "$ENABLE_INFRA"
-    _row "Container Image"        "$ENABLE_IMAGE"
-    _row "ArgoCD"                 "$ENABLE_ARGO"
-    _row "Kubernetes Application" "$ENABLE_KUBERNETES"
-    _row "Prometheus + Grafana"   "$ENABLE_MONITORING"
-    _row "Loki Logging"           "$ENABLE_LOKI"
-    _row "Trivy Security Scan"    "$ENABLE_TRIVY"
-
-    echo -e "  ${BOLD}${BRIGHT_CYAN}||==============================================||${RESET}"
-    echo ""
-}
-
 # CONFIRMATION GATE
 
-_confirm_plan() {
-    _show_plan
+_confirm_deployment() {
 
-    if ! _ask_yn "Proceed with this deployment plan?" "y"; then
+    echo ""
+
+    print_section "Deployment Confirmation"
+
+    print_info "Environment: ${BOLD}${DEPLOY_TARGET^^}${RESET}"
+
+    if [[ "$DEPLOY_TARGET" == "prod" ]]; then
+        print_info "Cloud Provider: ${BOLD}${CLOUD_PROVIDER^^}${RESET}"
+        print_info "Infrastructure Action: ${BOLD}${INFRA_ACTION^^}${RESET}"
+    fi
+
+    echo ""
+
+    if ! _ask_yn "Proceed with deployment?" "y"; then
         echo ""
         print_info "Deployment cancelled by user"
         exit 0
@@ -541,19 +429,23 @@ deploy_infra() {
         exit 1
     fi
     print_subsection "Infrastructure — ${CLOUD_PROVIDER^^}"
-    INFRA_ACTION="$INFRA_ACTION" CLOUD_PROVIDER="$CLOUD_PROVIDER" \
-        bash "$PROJECT_ROOT/platform/infra/deploy_infra.sh" "$INFRA_ACTION" "$CLOUD_PROVIDER"
+
+    INFRA_ACTION="$INFRA_ACTION" \
+    CLOUD_PROVIDER="$CLOUD_PROVIDER" \
+        bash "$PROJECT_ROOT/platform/infra/deploy_infra.sh" \
+            "$INFRA_ACTION" \
+            "$CLOUD_PROVIDER"
+
     print_success "Infrastructure step complete"
     print_divider
 }
 
 deploy_image() {
     print_subsection "Container Image Build & Push"
-    bash "$PROJECT_ROOT/platform/cicd/github/configure_git_github.sh"
-    bash "$PROJECT_ROOT/platform/cicd/gitlab/configure_gitlab.sh"
 
     if [[ "$CONTAINER_RUNTIME" == "podman" ]]; then
-        bash "$PROJECT_ROOT/platform/deployment/build_and_push_image_podman.sh"
+
+        bash "$PROJECT_ROOT/platform/deployment/docker/build_and_push_image_podman.sh"
     else
         bash "$PROJECT_ROOT/platform/deployment/docker/build_and_push_image.sh"
     fi
@@ -561,49 +453,81 @@ deploy_image() {
     print_divider
 }
 
-deploy_argo()       { _run_step "Argo CD"              "$PROJECT_ROOT/platform/cicd/argo/deploy_argo.sh"; }
-deploy_kubernetes() { _run_step "Kubernetes App"       "$PROJECT_ROOT/platform/deployment/kubernetes/deploy_kubernetes.sh"; }
-deploy_monitoring() { _run_step "Prometheus + Grafana" "$PROJECT_ROOT/monitoring/deploy_monitoring.sh"; }
-deploy_loki()       { _run_step "Loki Logging"         "$PROJECT_ROOT/monitoring/loki/deploy_loki.sh"; }
-deploy_trivy()      { _run_step "Trivy Security Scan"  "$PROJECT_ROOT/monitoring/trivy/trivy.sh"; }
+deploy_argo() {
+    _run_step \
+        "Argo CD" \
+        "$PROJECT_ROOT/platform/cicd/argo/deploy_argo.sh"
+}
+
+deploy_kubernetes() {
+    _run_step \
+        "Kubernetes App" \
+        "$PROJECT_ROOT/platform/deployment/kubernetes/deploy_kubernetes.sh"
+}
+
+deploy_monitoring() {
+    _run_step \
+        "Prometheus + Grafana" \
+        "$PROJECT_ROOT/monitoring/deploy_monitoring.sh"
+}
+
+deploy_loki() {
+    _run_step \
+        "Loki Logging" \
+        "$PROJECT_ROOT/monitoring/loki/deploy_loki.sh"
+}
+
+deploy_trivy() {
+    _run_step \
+        "Trivy Security Scan" \
+        "$PROJECT_ROOT/monitoring/trivy/trivy.sh"
+}
 
 # ELAPSED TIME TRACKER
 _START_TIME=$SECONDS
 _elapsed() {
     local secs=$(( SECONDS - _START_TIME ))
-    printf "%dm %02ds" $(( secs / 60 )) $(( secs % 60 ))
+
+    printf "%dm %02ds" \
+        $(( secs / 60 )) \
+        $(( secs % 60 ))
 }
 
 # MAIN EXECUTION FLOW
 bootstrap_menu
-select_environment
-select_components
-_enforce_dependencies
 
-# Infra questions only if still valid
+# Select only Local or Production.
+select_environment
+
+# Automatically configure all services for the selected environment.
+configure_environment
+
+# Production-only infrastructure configuration.
 if [[ "$ENABLE_INFRA" == true ]]; then
     select_cloud_provider
     select_infra_action
 fi
 
-# confirm
-_confirm_plan
+# Confirm the environment and production infrastructure settings.
+_confirm_deployment
 
-# runtime detection
+# Runtime detection
+
 print_subsection "Detecting Runtime Environment"
 detect_container_runtime
 
-if [[ "$ENABLE_KUBERNETES" == true || \
-      "$ENABLE_ARGO" == true || \
-      "$ENABLE_MONITORING" == true || \
-      "$ENABLE_LOKI" == true || \
+if [[ "$ENABLE_KUBERNETES" == true ||
+      "$ENABLE_ARGO" == true ||
+      "$ENABLE_MONITORING" == true ||
+      "$ENABLE_LOKI" == true ||
       "$ENABLE_TRIVY" == true ]]; then
     detect_k8s_cluster
 fi
 
 print_divider
 
-# execute in dependency order
+# EXECUTE IN DEPENDENCY ORDER
+
 [[ "$ENABLE_INFRA"      == true ]] && deploy_infra
 [[ "$ENABLE_IMAGE"      == true ]] && deploy_image
 [[ "$ENABLE_ARGO"       == true ]] && deploy_argo
