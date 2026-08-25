@@ -201,7 +201,6 @@ select_environment() {
 
 configure_environment() {
 
-    # Reset all service flags
     ENABLE_INFRA=false
     ENABLE_IMAGE=false
     ENABLE_ARGO=false
@@ -210,35 +209,78 @@ configure_environment() {
     ENABLE_LOKI=false
     ENABLE_TRIVY=false
 
+
     case "$DEPLOY_TARGET" in
 
-        local)
-            # Local platform
-            ENABLE_IMAGE=true
-            ENABLE_KUBERNETES=true
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
+    local)
 
-        prod)
-            # Production platform
-            ENABLE_INFRA=true
-            ENABLE_IMAGE=true
-            ENABLE_ARGO=true
-            ENABLE_KUBERNETES=true
-            ENABLE_MONITORING=true
-            ENABLE_LOKI=true
-            ENABLE_TRIVY=true
-            ;;
+        DEPLOY_MODE="direct"
 
-        *)
-            print_error "Unsupported deployment environment: ${DEPLOY_TARGET}"
-            exit 1
-            ;;
+        ENABLE_IMAGE=true
+        ENABLE_KUBERNETES=true
+        ENABLE_MONITORING=true
+        ENABLE_LOKI=true
+        ENABLE_TRIVY=true
+
+
+        print_section "LOCAL DIRECT DEPLOYMENT"
+
+        print_success "Mode: Direct Kubernetes"
+        print_success "Cluster: Minikube / Kind / K3s"
+        print_success "Application: kubectl apply"
+        print_success "Monitoring: Direct install"
+        print_success "Logging: Direct install"
+        print_success "Security: Direct install"
+
+        print_info "Disabled:"
+        print_info "ArgoCD"
+        print_info "GitOps"
+
+        ;;
+
+
+    prod)
+
+        DEPLOY_MODE="gitops"
+
+        ENABLE_INFRA=true
+        ENABLE_IMAGE=true
+
+        ENABLE_ARGO=true
+
+        # Argo manages these
+        ENABLE_KUBERNETES=false
+        ENABLE_MONITORING=false
+        ENABLE_LOKI=false
+        ENABLE_TRIVY=false
+
+
+        print_section "PRODUCTION GITOPS DEPLOYMENT"
+
+        print_success "Mode: GitOps"
+        print_success "Infrastructure provisioning"
+        print_success "Container registry"
+        print_success "ArgoCD"
+        print_success "Application via Git"
+        print_success "Monitoring via Git"
+        print_success "Loki via Git"
+        print_success "Trivy via Git"
+
+        print_info "Disabled:"
+        print_info "Direct kubectl deployment"
+
+        ;;
+
+
+    *)
+        print_error "Unknown deployment target"
+        exit 1
+        ;;
 
     esac
 
+
+    export DEPLOY_MODE
     export ENABLE_INFRA
     export ENABLE_IMAGE
     export ENABLE_ARGO
@@ -247,35 +289,8 @@ configure_environment() {
     export ENABLE_LOKI
     export ENABLE_TRIVY
 
-    print_section "Environment Configuration"
 
-    if [[ "$DEPLOY_TARGET" == "local" ]]; then
-
-        print_info "Local environment services:"
-        print_success "Container Image"
-        print_success "Kubernetes Application"
-        print_success "Prometheus + Grafana"
-        print_success "Loki Logging"
-        print_success "Trivy Security Scan"
-
-        print_info "Disabled for local:"
-        print_info "Argo CD"
-        print_info "Cloud Infrastructure"
-
-    else
-
-        print_info "Production environment services:"
-        print_success "Cloud Infrastructure"
-        print_success "Container Image"
-        print_success "Argo CD"
-        print_success "Kubernetes Application"
-        print_success "Prometheus + Grafana"
-        print_success "Loki Logging"
-        print_success "Trivy Security Scan"
-
-    fi
-
-    print_success "Environment service configuration complete"
+    print_success "Deployment mode: ${DEPLOY_MODE}"
 }
 
 # STEP 3 — CLOUD PROVIDER
@@ -542,11 +557,22 @@ if [[ "$DEPLOY_TARGET" == "prod" ]]; then
     fi
 fi
 
-[[ "$ENABLE_ARGO"       == true ]] && deploy_argo
-[[ "$ENABLE_KUBERNETES" == true ]] && deploy_kubernetes
-[[ "$ENABLE_MONITORING" == true ]] && deploy_monitoring
-[[ "$ENABLE_LOKI"       == true ]] && deploy_loki
-[[ "$ENABLE_TRIVY"      == true ]] && deploy_trivy
+if [[ "$DEPLOY_MODE" == "gitops" ]]; then
+
+    print_section "GITOPS PIPELINE"
+
+    deploy_argo
+
+else
+
+    print_section "DIRECT KUBERNETES PIPELINE"
+
+    deploy_kubernetes
+    deploy_monitoring
+    deploy_loki
+    deploy_trivy
+
+fi
 
 # COMPLETION BANNER
 

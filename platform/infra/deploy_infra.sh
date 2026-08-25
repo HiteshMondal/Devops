@@ -33,6 +33,48 @@ else
     exit 1
 fi
 
+# AWS authentication
+export AWS_PROFILE="${AWS_PROFILE:-default}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_DEFAULT_REGION="$AWS_REGION"
+
+print_subsection "AWS Troubleshooting Commands"
+
+cat <<'EOF'
+
+Run manually if AWS authentication fails:
+
+date -u
+timedatectl status
+systemctl status chrony
+chronyc sources -v
+chronyc tracking
+chronyc activity
+sudo chronyc makestep
+aws sts get-caller-identity
+aws ec2 describe-availability-zones --region us-east-1
+
+EOF
+
+print_subsection "AWS Authentication"
+
+print_info "AWS profile: ${AWS_PROFILE}"
+print_info "AWS region:  ${AWS_REGION}"
+
+aws sts get-caller-identity >/dev/null
+
+print_success "AWS credentials are valid"
+
+# Terraform variables
+export TF_VAR_db_username="$DB_USERNAME"
+export TF_VAR_db_password="$DB_PASSWORD"
+export TF_VAR_db_name="$DB_NAME"
+export TF_VAR_db_port="$DB_PORT"
+
+export TF_VAR_app_name="$APP_NAME"
+export TF_VAR_app_port="$APP_PORT"
+export TF_VAR_aws_region="$AWS_REGION"
+
 # Defaults
 : "${INFRA_ACTION:=plan}"
 : "${CLOUD_PROVIDER:=aws}"
@@ -86,21 +128,25 @@ deploy_terraform() {
 
     cd "$tf_dir"
 
+    print_info "AWS profile: ${AWS_PROFILE}"
+    print_info "AWS region:  ${AWS_REGION}"
+
     terraform init -upgrade
+
     case "$ACTION" in
         plan)
             terraform validate
-            terraform plan -out=tfplan
+            AWS_PROFILE="$AWS_PROFILE" terraform plan -out=tfplan
             ;;
         apply)
             terraform validate
-            terraform plan -out=tfplan
-            terraform apply tfplan
+            AWS_PROFILE="$AWS_PROFILE" terraform plan -out=tfplan
+            AWS_PROFILE="$AWS_PROFILE" terraform apply tfplan
             print_success "Terraform apply complete"
             ;;
         destroy)
             print_warning "Destroying Terraform infrastructure"
-            terraform destroy -auto-approve
+            AWS_PROFILE="$AWS_PROFILE" terraform destroy -auto-approve
             print_success "Terraform destroy complete"
             ;;
     esac

@@ -132,3 +132,6 @@ temp/
 # DATA
 data
 app-data
+
+# Argo
+platform/cicd/argo/generated/

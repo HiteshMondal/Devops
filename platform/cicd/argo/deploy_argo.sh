@@ -25,6 +25,7 @@ export ARGOCD_SERVER ARGOCD_ADMIN_PASS ARGOCD_USE_GRPC_WEB
 if [[ -z "${GIT_REPO_URL:-}" ]]; then
     GIT_REPO_URL="$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || echo '')"
 fi
+
 : "${GIT_REPO_BRANCH:=main}"
 : "${GIT_REPO_PATH_APP:=kubernetes/base}"
 : "${GIT_REPO_PATH_MONITORING:=monitoring/prometheus_grafana}"
@@ -33,16 +34,18 @@ fi
 : "${DEPLOY_TARGET:?DEPLOY_TARGET must be set by run.sh}"
 
 #  ARGO
-: "${ARGOCD_NAMESPACE:=argocd}"
+: "${ARGOCD_NAMESPACE:?ARGOCD_NAMESPACE missing}"
+: "${ARGOCD_LOCAL_PORT:?ARGOCD_LOCAL_PORT missing}"
+: "${PROMETHEUS_NAMESPACE:?PROMETHEUS_NAMESPACE missing}"
+: "${LOKI_NAMESPACE:?LOKI_NAMESPACE missing}"
+: "${TRIVY_NAMESPACE:?TRIVY_NAMESPACE missing}"
 : "${ARGOCD_VERSION:=v2.10.0}"
 : "${ARGOCD_ADMIN_PASSWORD:=}"
 : "${DEPLOY_TARGET:=local}"
 : "${NAMESPACE:=devops-app}"
 : "${APP_NAME:=devops-app}"
-: "${PROMETHEUS_NAMESPACE:=monitoring}"
-: "${LOKI_NAMESPACE:=loki}"
 : "${ARGOCD_SYNC_WAVE_ENABLED:=true}"
-: "${ARGOCD_LOCAL_PORT:=8080}"
+
 
 export ARGOCD_NAMESPACE ARGOCD_VERSION DEPLOY_TARGET NAMESPACE APP_NAME
 export PROMETHEUS_NAMESPACE LOKI_NAMESPACE TRIVY_NAMESPACE
@@ -52,11 +55,17 @@ export GIT_REPO_PATH_APP GIT_REPO_PATH_MONITORING GIT_REPO_PATH_LOKI GIT_REPO_PA
 
 # argocd CLI wrapper
 argocd_cmd() {
+
+    local args=(
+        --server "$ARGOCD_SERVER"
+        --insecure
+    )
+
     if [[ "$ARGOCD_USE_GRPC_WEB" == "true" ]]; then
-        argocd --server "$ARGOCD_SERVER" --grpc-web --insecure "$@"
-    else
-        argocd --server "$ARGOCD_SERVER" "$@"
+        args+=(--grpc-web)
     fi
+
+    argocd "${args[@]}" "$@"
 }
 
 # port-forward health guard

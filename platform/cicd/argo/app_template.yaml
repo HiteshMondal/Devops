@@ -19,9 +19,9 @@ spec:
   project: default
   info:
     - name: Loki Endpoint (Internal)
-      value: http://loki.${LOKI_NAMESPACE}.svc.cluster.local:3100
+      value: http://loki.${LOKI_NAMESPACE}.svc.cluster.local:${LOKI_PORT}
     - name: Grafana Datasource URL
-      value: http://loki.${LOKI_NAMESPACE}.svc.cluster.local:3100
+      value: http://loki.${LOKI_NAMESPACE}.svc.cluster.local:${LOKI_PORT}
     - name: Recommended Grafana Dashboard
       value: "14055 (Loki Logs)"
   source:
@@ -75,7 +75,7 @@ spec:
   info:
     - name: Prometheus (Universal Access)
       value: |
-        kubectl port-forward svc/prometheus 9090:9090 -n ${PROMETHEUS_NAMESPACE}
+        kubectl port-forward svc/prometheus ${PROMETHEUS_PORT}:${PROMETHEUS_PORT} -n ${PROMETHEUS_NAMESPACE}
         Open: http://localhost:9090
     - name: Grafana (Universal Access)
       value: |
@@ -93,7 +93,7 @@ spec:
   source:
     repoURL: ${GIT_REPO_URL}
     targetRevision: ${GIT_REPO_BRANCH}
-    path: monitoring/prometheus_grafana
+    path: monitoring/prometheus
   destination:
     server: https://kubernetes.default.svc
     namespace: ${PROMETHEUS_NAMESPACE}
