@@ -152,13 +152,16 @@ data:
       - job_name: 'kube-state-metrics'
         static_configs:
           - targets:
-              - kube-state-metrics.kube-system.svc.cluster.local:8080
+              - kube-state-metrics.monitoring.svc.cluster.local:8080
 
       - job_name: 'node-exporter'
         kubernetes_sd_configs:
           - role: endpoints
+            namespaces:
+              names:
+                - monitoring
         relabel_configs:
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          - source_labels: [__meta_kubernetes_service_name]
             action: keep
             regex: node-exporter
 

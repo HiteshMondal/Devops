@@ -512,15 +512,11 @@ fi
 _confirm_deployment
 
 # Runtime detection
-
 print_subsection "Detecting Runtime Environment"
 detect_container_runtime
 
-if [[ "$ENABLE_KUBERNETES" == true ||
-      "$ENABLE_ARGO" == true ||
-      "$ENABLE_MONITORING" == true ||
-      "$ENABLE_LOKI" == true ||
-      "$ENABLE_TRIVY" == true ]]; then
+# Local deployments require an already-running Kubernetes cluster.
+if [[ "$DEPLOY_TARGET" == "local" ]]; then
     detect_k8s_cluster
 fi
 
@@ -528,8 +524,24 @@ print_divider
 
 # EXECUTE IN DEPENDENCY ORDER
 
+# Production infrastructure first.
 [[ "$ENABLE_INFRA"      == true ]] && deploy_infra
+
+# Build/push container image.
 [[ "$ENABLE_IMAGE"      == true ]] && deploy_image
+
+# Production cloud infrastructure may have created the Kubernetes cluster.
+# Only check Kubernetes connectivity after infrastructure provisioning.
+if [[ "$DEPLOY_TARGET" == "prod" ]]; then
+    if [[ "$ENABLE_ARGO"       == true ||
+          "$ENABLE_KUBERNETES" == true ||
+          "$ENABLE_MONITORING" == true ||
+          "$ENABLE_LOKI"       == true ||
+          "$ENABLE_TRIVY"      == true ]]; then
+        detect_k8s_cluster
+    fi
+fi
+
 [[ "$ENABLE_ARGO"       == true ]] && deploy_argo
 [[ "$ENABLE_KUBERNETES" == true ]] && deploy_kubernetes
 [[ "$ENABLE_MONITORING" == true ]] && deploy_monitoring

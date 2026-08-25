@@ -129,31 +129,6 @@ setup_helm() {
     print_success "Helm repos updated"
 }
 
-deploy_node_exporter() {
-    print_subsection "Deploying Node Exporter"
-
-    if helm status node-exporter -n "$PROMETHEUS_NAMESPACE" >/dev/null 2>&1; then
-        print_info "node-exporter already installed — skipping"
-        return
-    fi
-
-    helm upgrade --install node-exporter \
-        prometheus-community/prometheus-node-exporter \
-        --namespace "$PROMETHEUS_NAMESPACE" \
-        --create-namespace \
-        --values "$PROJECT_ROOT/monitoring/node-exporter/values.yaml" \
-        --set service.type=ClusterIP \
-        --set tolerations[0].operator=Exists \
-        --set hostNetwork=true \
-        --output table
-
-    print_step "Waiting for node-exporter pods..."
-    kubectl rollout status daemonset/node-exporter \
-        -n "$PROMETHEUS_NAMESPACE" --timeout=30s || true
-
-    print_success "node-exporter deployed"
-}
-
 create_prometheus_configmap() {
     local prometheus_yml="$1"
     local namespace="$2"
@@ -384,6 +359,16 @@ deploy_monitoring() {
 
     print_success "Namespace ready"
 
+    kubectl apply -n "$namespace" -f "$PROJECT_ROOT/monitoring/prometheus/agents.yaml"
+    kubectl rollout status deployment/kube-state-metrics -n "$namespace" --timeout=300s
+    if kubectl get daemonset node-exporter -n "$namespace" >/dev/null 2>&1; then
+        kubectl rollout status daemonset/node-exporter \
+            -n "$namespace" \
+            --timeout=300s
+    else
+        print_warning "node-exporter is not installed in namespace ${namespace}"
+    fi
+
     # PROMETHEUS
     print_subsection "Deploying Prometheus"
 
@@ -438,16 +423,6 @@ deploy_monitoring() {
         "CRED:Password:${GRAFANA_ADMIN_PASSWORD}"
 
     print_success "Grafana ready"
-
-    # NODE EXPORTER
-
-    deploy_node_exporter
-
-    kubectl rollout status daemonset/node-exporter \
-        -n "$namespace" \
-        --timeout=30s || print_warning "node-exporter rollout still progressing"
-
-    print_success "Node Exporter ready"
 
     print_monitoring_access grafana "$namespace" "$GRAFANA_PORT" "Grafana"
 
