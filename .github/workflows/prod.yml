@@ -1,449 +1,386 @@
-# ============================================================================
-# GitHub Actions Workflow — CI ONLY
-# ============================================================================
-# /.github/workflows/prod.yml
+########################################################################
+# .github/workflows/prod.yml — Production-grade CI (validation only)
 #
-# ARCHITECTURE:
-#   GitHub Actions = Validate + Build + Push Docker image (CI)
-#   Argo CD        = All actual deployments (local + prod)
+# This is CI, not CD: nothing is deployed, applied, or pushed anywhere.
+# It only lints, builds, and validates — so it never needs cloud
+# credentials and never provisions billable resources.
 #
-# After this pipeline pushes a new image, Argo CD detects the image tag change
-# in kubernetes manifests and automatically deploys to the cluster.
+# Zero-cost design:
+#   - Only ubuntu-latest GitHub-hosted runners (free for public repos,
+#     covered by included minutes on private repos).
+#   - No self-hosted runners, no cloud API calls (terraform/tofu use
+#     `init -backend=false` + `validate`/`fmt` — no AWS/OCI/Azure creds).
+#   - Docker images are built locally (`push: false`) and scanned,
+#     never pushed to a registry.
+#   - Dependency + Docker layer caching (actions/setup-python cache,
+#     type=gha buildx cache) to keep runs short.
+#   - concurrency cancels superseded runs; every job has a timeout so a
+#     stuck step can't burn minutes indefinitely.
+#   - Doc-only changes don't trigger a run.
 #
-# Configure secrets in: Repository → Settings → Secrets and variables → Actions
-# ============================================================================
+# Environment variables:
+#   Every job that needs config values sources them from the repo's
+#   .env (if committed, e.g. on a self-hosted/private fork) or falls
+#   back to .env.example (the template checked into the repo) — never
+#   hardcoded in this file. Real secrets (DOCKERHUB_PASSWORD,
+#   GITHUB_TOKEN, JWT_SECRET, etc.) are never required because CI never
+#   pushes images or talks to a live cluster/cloud account.
+########################################################################
 
-name: CI — Build, Test & Push
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - 'feature/**'
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - "monitoring/documentation.md"
+      - "platform/cicd/CICD_Documentation.md"
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
-    inputs:
-      force_push:
-        description: 'Force push image even if no code changes'
-        required: false
-        default: false
-        type: boolean
 
-env:
-  #  App 
-  APP_NAME:           ${{ vars.APP_NAME            || 'devops-app' }}
-  NAMESPACE:          ${{ vars.NAMESPACE           || 'devops-app' }}
-  APP_PORT:           ${{ vars.APP_PORT            || '3000' }}
-  REPLICAS:           ${{ vars.REPLICAS            || '2' }}
-  MIN_REPLICAS:       ${{ vars.MIN_REPLICAS        || '2' }}
-  MAX_REPLICAS:       ${{ vars.MAX_REPLICAS        || '10' }}
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-  #  Docker 
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  DOCKER_IMAGE_TAG:   ${{ vars.DOCKER_IMAGE_TAG    || 'latest' }}
+permissions:
+  contents: read
 
-  #  Ingress 
-  INGRESS_ENABLED:    ${{ vars.INGRESS_ENABLED     || 'true' }}
-  INGRESS_HOST:       ${{ vars.INGRESS_HOST        || 'devops-app.local' }}
-  INGRESS_CLASS:      ${{ vars.INGRESS_CLASS       || 'nginx' }}
-  TLS_ENABLED:        ${{ vars.TLS_ENABLED         || 'false' }}
-  TLS_SECRET_NAME:    ${{ vars.TLS_SECRET_NAME     || 'devops-app-tls' }}
-
-  #  Database 
-  DB_HOST:            ${{ vars.DB_HOST             || 'localhost' }}
-  DB_PORT:            ${{ vars.DB_PORT             || '5432' }}
-  DB_NAME:            ${{ vars.DB_NAME             || 'devopsdb' }}
-  DB_USERNAME:        ${{ secrets.DB_USERNAME }}
-
-  #  Monitoring 
-  PROMETHEUS_ENABLED:        ${{ vars.PROMETHEUS_ENABLED        || 'true' }}
-  PROMETHEUS_NAMESPACE:      ${{ vars.PROMETHEUS_NAMESPACE      || 'monitoring' }}
-  PROMETHEUS_RETENTION:      ${{ vars.PROMETHEUS_RETENTION      || '15d' }}
-  PROMETHEUS_STORAGE_SIZE:   ${{ vars.PROMETHEUS_STORAGE_SIZE   || '10Gi' }}
-  PROMETHEUS_SCRAPE_INTERVAL: ${{ vars.PROMETHEUS_SCRAPE_INTERVAL || '15s' }}
-  PROMETHEUS_SCRAPE_TIMEOUT: ${{ vars.PROMETHEUS_SCRAPE_TIMEOUT || '10s' }}
-  GRAFANA_ENABLED:           ${{ vars.GRAFANA_ENABLED           || 'true' }}
-  GRAFANA_ADMIN_USER:        ${{ vars.GRAFANA_ADMIN_USER        || 'admin' }}
-  GRAFANA_PORT:              ${{ vars.GRAFANA_PORT              || '3000' }}
-  GRAFANA_STORAGE_SIZE:      ${{ vars.GRAFANA_STORAGE_SIZE      || '5Gi' }}
-
-  #  Resource Limits — App 
-  APP_CPU_REQUEST:    ${{ vars.APP_CPU_REQUEST     || '100m' }}
-  APP_CPU_LIMIT:      ${{ vars.APP_CPU_LIMIT       || '500m' }}
-  APP_MEMORY_REQUEST: ${{ vars.APP_MEMORY_REQUEST  || '128Mi' }}
-  APP_MEMORY_LIMIT:   ${{ vars.APP_MEMORY_LIMIT    || '512Mi' }}
-
-  #  Resource Limits — Prometheus 
-  PROMETHEUS_CPU_REQUEST:    ${{ vars.PROMETHEUS_CPU_REQUEST    || '500m' }}
-  PROMETHEUS_CPU_LIMIT:      ${{ vars.PROMETHEUS_CPU_LIMIT      || '2000m' }}
-  PROMETHEUS_MEMORY_REQUEST: ${{ vars.PROMETHEUS_MEMORY_REQUEST || '1Gi' }}
-  PROMETHEUS_MEMORY_LIMIT:   ${{ vars.PROMETHEUS_MEMORY_LIMIT   || '4Gi' }}
-
-  #  Resource Limits — Grafana 
-  GRAFANA_CPU_REQUEST:    ${{ vars.GRAFANA_CPU_REQUEST    || '100m' }}
-  GRAFANA_CPU_LIMIT:      ${{ vars.GRAFANA_CPU_LIMIT      || '500m' }}
-  GRAFANA_MEMORY_REQUEST: ${{ vars.GRAFANA_MEMORY_REQUEST || '256Mi' }}
-  GRAFANA_MEMORY_LIMIT:   ${{ vars.GRAFANA_MEMORY_LIMIT   || '1Gi' }}
-
-  #  AWS / EKS 
-  AWS_REGION:         ${{ vars.AWS_REGION          || 'us-east-1' }}
-  EKS_CLUSTER_NAME:   ${{ vars.EKS_CLUSTER_NAME    || 'devops-cluster' }}
-
-  #  Git 
-  GIT_AUTHOR_NAME:    ${{ vars.GIT_AUTHOR_NAME     || github.actor }}
-  GIT_AUTHOR_EMAIL:   ${{ vars.GIT_AUTHOR_EMAIL    || format('{0}@users.noreply.github.com', github.actor) }}
-
-  #  Loki 
-  LOKI_ENABLED:          ${{ vars.LOKI_ENABLED          || 'true' }}
-  LOKI_NAMESPACE:        ${{ vars.LOKI_NAMESPACE        || 'loki' }}
-  LOKI_RETENTION_PERIOD: ${{ vars.LOKI_RETENTION_PERIOD || '168h' }}
-  LOKI_STORAGE_SIZE:     ${{ vars.LOKI_STORAGE_SIZE     || '10Gi' }}
-
-  #  Security / Trivy 
-  TRIVY_ENABLED:         ${{ vars.TRIVY_ENABLED         || 'true' }}
-  TRIVY_NAMESPACE:       ${{ vars.TRIVY_NAMESPACE        || 'trivy-system' }}
-  TRIVY_SEVERITY:        ${{ vars.TRIVY_SEVERITY         || 'HIGH,CRITICAL' }}
-  TRIVY_METRICS_ENABLED: ${{ vars.TRIVY_METRICS_ENABLED  || 'true' }}
-
-  #  CI flag 
-  CI: true
-
-# ============================================================================
 jobs:
 
-  # JOB 1 — Validate required variables & secrets
-  validate:
-    name: Validate Variables & Secrets
+  #  Load .env (or .env.example) once, expose values to later jobs 
+  load-env:
+    name: Load .env
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app_name: ${{ steps.dotenv.outputs.app_name }}
+      namespace: ${{ steps.dotenv.outputs.namespace }}
+      app_port: ${{ steps.dotenv.outputs.app_port }}
+      env_source: ${{ steps.resolve.outputs.file }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Validate required variables
+      - name: Resolve which env file to use
+        id: resolve
         run: |
-          echo "============================================================================"
-          echo "Validating Required CI Variables"
-          echo "============================================================================"
+          set -euo pipefail
+          if [[ -f .env ]]; then
+            echo "file=.env" >> "$GITHUB_OUTPUT"
+          elif [[ -f .env.example ]]; then
+            echo "file=.env.example" >> "$GITHUB_OUTPUT"
+            echo "::notice::No .env committed — using .env.example defaults for CI"
+          else
+            echo "::error::Neither .env nor .env.example found at repo root"
+            exit 1
+          fi
 
-          REQUIRED_VARS=(APP_NAME NAMESPACE DOCKERHUB_USERNAME DOCKER_IMAGE_TAG APP_PORT REPLICAS)
-          MISSING=()
+      - name: Export values needed by later jobs
+        id: dotenv
+        run: |
+          set -a
+          # shellcheck disable=SC1090
+          source "${{ steps.resolve.outputs.file }}"
+          set +a
+          {
+            echo "app_name=${APP_NAME:-devops-app}"
+            echo "namespace=${NAMESPACE:-devops-app}"
+            echo "app_port=${APP_PORT:-8000}"
+          } >> "$GITHUB_OUTPUT"
 
-          for var in "${REQUIRED_VARS[@]}"; do
-            if [[ -z "${!var}" ]]; then
-              MISSING+=("$var")
+  #  Shell scripts 
+  shellcheck:
+    name: Lint Shell Scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: Run shellcheck on every *.sh file
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name "*.sh" -not -path "./.git/*")
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No shell scripts found"
+            exit 0
+          fi
+          shellcheck -S warning "${files[@]}"
+
+  #  YAML syntax/style 
+  yamllint:
+    name: Lint YAML
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet yamllint
+      - name: yamllint
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f \( -name "*.yml" -o -name "*.yaml" \) -not -path "./.git/*")
+          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable}}" "${files[@]}"
+
+  #  Python app: lint, compile, tests 
+  python-app:
+    name: Python App — Lint & Test
+    runs-on: ubuntu-latest
+    needs: load-env
+    timeout-minutes: 10
+    env:
+      APP_NAME: ${{ needs.load-env.outputs.app_name }}
+      APP_PORT: ${{ needs.load-env.outputs.app_port }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: app/requirements.txt
+
+      - name: Install dependencies
+        working-directory: app
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest
+
+      - name: Ruff lint
+        working-directory: app
+        run: ruff check src
+
+      - name: Byte-compile check
+        working-directory: app
+        run: python -m py_compile $(find src -name "*.py")
+
+      - name: Run tests (if any exist)
+        working-directory: app
+        run: |
+          if find . -type f -name "test_*.py" -o -type f -name "*_test.py" | grep -q .; then
+            pytest -q
+          else
+            echo "No tests found — skipping pytest"
+          fi
+
+  #  Docker: build locally + vulnerability scan, never push 
+  docker-build:
+    name: Docker Build & Scan (no push)
+    runs-on: ubuntu-latest
+    needs: load-env
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build app image (local only)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          push: false
+          load: true
+          tags: ${{ needs.load-env.outputs.app_name }}:ci
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
+
+      - name: Scan app image (report only)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ needs.load-env.outputs.app_name }}:ci
+          format: table
+          exit-code: "0"
+          severity: LOW,MEDIUM,HIGH,CRITICAL
+
+      - name: Gate on CRITICAL/HIGH vulnerabilities
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ needs.load-env.outputs.app_name }}:ci
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Build Trivy exporter image (validate only)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./monitoring/trivy
+          push: false
+          cache-from: type=gha,scope=trivy-exporter
+          cache-to: type=gha,mode=max,scope=trivy-exporter
+
+      - name: Build Trivy runner image (validate only)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./monitoring/trivy/trivy-runner
+          push: false
+          cache-from: type=gha,scope=trivy-runner
+          cache-to: type=gha,mode=max,scope=trivy-runner
+
+  #  Kubernetes manifests: fully offline, no live cluster needed 
+  kubernetes-validate:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    needs: load-env
+    timeout-minutes: 10
+    env:
+      APP_NAME: ${{ needs.load-env.outputs.app_name }}
+      NAMESPACE: ${{ needs.load-env.outputs.namespace }}
+      APP_PORT: ${{ needs.load-env.outputs.app_port }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "latest"
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+
+      - name: Render every Kustomize overlay (offline)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rendered
+          find . -type f -name kustomization.yaml -not -path "./.git/*" | while read -r kfile; do
+            dir="$(dirname "$kfile")"
+            slug="$(echo "$dir" | tr '/.' '__')"
+            echo "== Rendering ${dir} =="
+            if kubectl kustomize "$dir" > "/tmp/rendered/${slug}.yaml" 2> "/tmp/rendered/${slug}.err"; then
+              echo "OK: ${dir}"
+            else
+              # Some overlays (e.g. app deployment overlays) only become
+              # fully valid once deploy_kubernetes.sh generates its
+              # runtime patch files — that's expected pre-deploy, so warn
+              # instead of failing the whole job.
+              echo "::warning::Could not render ${dir} standalone (likely needs runtime-generated patches)"
+              cat "/tmp/rendered/${slug}.err"
+              rm -f "/tmp/rendered/${slug}.yaml"
             fi
           done
 
-          if [[ ${#MISSING[@]} -gt 0 ]]; then
-            echo "❌ Missing required variables:"
-            for v in "${MISSING[@]}"; do echo "   - $v"; done
-            echo ""
-            echo "Configure at: Settings → Secrets and variables → Actions"
-            exit 1
-          fi
-          echo "✅ All required variables present"
-
-      - name: Validate secrets
+      - name: Render standalone manifests (envsubst from .env)
         run: |
-          echo "Checking secrets (values hidden)..."
-          WARN=()
-          [[ -z "${{ secrets.DOCKERHUB_PASSWORD }}" ]] && WARN+=("DOCKERHUB_PASSWORD")
-          [[ -z "${{ secrets.DB_PASSWORD }}"        ]] && WARN+=("DB_PASSWORD")
-          [[ -z "${{ secrets.JWT_SECRET }}"         ]] && WARN+=("JWT_SECRET")
-
-          if [[ ${#WARN[@]} -gt 0 ]]; then
-            echo "⚠️  Warning — missing optional secrets:"
-            for s in "${WARN[@]}"; do echo "   - $s"; done
-          else
-            echo "✅ All secrets configured"
-          fi
-
-  # JOB 2 — Lint & static analysis
-  lint:
-    name: Lint & Static Analysis
-    runs-on: ubuntu-latest
-    needs: validate
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Lint shell scripts
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y gettext-base
-          echo "============================================================================"
-          echo "Linting Shell Scripts"
-          echo "============================================================================"
-          if command -v shellcheck >/dev/null 2>&1; then
-            find . -name "*.sh" -not -path "./.git/*" -print0 | \
-            xargs -0 -r shellcheck --severity=error
-            echo "✅ ShellCheck (errors only) complete"
-          else
-            sudo apt-get install -y shellcheck -q
-            find . -name "*.sh" -not -path "./.git/*" -print0 | \
-            xargs -0 -r shellcheck --severity=error
-            echo "✅ ShellCheck (errors only) complete"
-          fi
-
-      - name: Validate Kubernetes manifests
-        run: |
-          echo "============================================================================"
-          echo "Validating Kubernetes Manifests"
-          echo "============================================================================"
-
-          # Install kubeval
-          if ! command -v kubeval >/dev/null 2>&1; then
-            curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
-              | tar xz -C /tmp
-            sudo mv /tmp/kubeconform /usr/local/bin/
-          fi
-
-          # Set dummy vars for envsubst so validation doesn't fail on templates
-          export APP_NAME="${APP_NAME}" NAMESPACE="${NAMESPACE}" \
-            DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-dummy}" \
-            DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG}" APP_PORT="${APP_PORT}" \
-            REPLICAS="${REPLICAS}" MIN_REPLICAS="${MIN_REPLICAS}" \
-            MAX_REPLICAS="${MAX_REPLICAS}" INGRESS_HOST="${INGRESS_HOST}" \
-            INGRESS_CLASS="${INGRESS_CLASS}" TLS_SECRET_NAME="${TLS_SECRET_NAME}" \
-            PROMETHEUS_NAMESPACE="${PROMETHEUS_NAMESPACE}" \
-            CPU_TARGET_UTILIZATION="70" MEMORY_TARGET_UTILIZATION="80" \
-            APP_CPU_REQUEST="${APP_CPU_REQUEST}" APP_CPU_LIMIT="${APP_CPU_LIMIT}" \
-            APP_MEMORY_REQUEST="${APP_MEMORY_REQUEST}" APP_MEMORY_LIMIT="${APP_MEMORY_LIMIT}" \
-            DB_HOST="${DB_HOST}" DB_PORT="${DB_PORT}" DB_NAME="${DB_NAME}" \
-            DB_USERNAME="${DB_USERNAME:-dummy}" DB_PASSWORD="dummy" \
-            JWT_SECRET="dummy" API_KEY="dummy" SESSION_SECRET="dummy" \
-            K8S_DISTRIBUTION="kubernetes" K8S_SERVICE_TYPE="ClusterIP" \
-            K8S_INGRESS_CLASS="nginx" K8S_SUPPORTS_LOADBALANCER="false" \
-            INGRESS_ENABLED="${INGRESS_ENABLED}"
-
-          find kubernetes/base -name "*.yaml" | while read -r f; do
-            envsubst < "$f" | kubeconform -strict -ignore-missing-schemas && \
-              echo "  ✅ $f" || echo "  ❌ $f"
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1090
+          source "${{ needs.load-env.outputs.env_source }}"
+          set +a
+          mkdir -p /tmp/rendered
+          for dir in monitoring/prometheus monitoring/grafana monitoring/loki monitoring/trivy platform/deployment/kubernetes/base; do
+            [[ -d "$dir" ]] || continue
+            find "$dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "kustomization.yaml" | while read -r f; do
+              slug="$(echo "$f" | tr '/.' '__')"
+              envsubst < "$f" > "/tmp/rendered/${slug}.yaml"
+            done
           done
 
-      - name: Check .env example completeness
+      - name: Validate all rendered manifests against Kubernetes schemas
         run: |
-          echo "============================================================================"
-          echo "Checking dotenv_example covers all variables used in manifests"
-          echo "============================================================================"
-          # Extract all ${VAR} patterns from k8s manifests
-          USED=$(grep -roh '\${[A-Z_]\+}' kubernetes/ monitoring/ Security/ 2>/dev/null \
-            | sort -u | sed 's/[${}]//g')
-          MISSING_FROM_EXAMPLE=()
-          while IFS= read -r var; do
-            grep -q "^${var}=" dotenv_example 2>/dev/null || MISSING_FROM_EXAMPLE+=("$var")
-          done <<< "$USED"
-          if [[ ${#MISSING_FROM_EXAMPLE[@]} -gt 0 ]]; then
-            echo "⚠️  Variables used in manifests but missing from dotenv_example:"
-            for v in "${MISSING_FROM_EXAMPLE[@]}"; do echo "   - $v"; done
-          else
-            echo "✅ dotenv_example covers all manifest variables"
+          set -euo pipefail
+          shopt -s nullglob
+          files=(/tmp/rendered/*.yaml)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "::error::No manifests were rendered — nothing to validate"
+            exit 1
           fi
+          # -ignore-missing-schemas: skip CRDs (ArgoCD Application, etc.)
+          # since no cluster/CRD registry is available offline.
+          kubeconform -strict -summary -ignore-missing-schemas \
+            -kubernetes-version 1.30.0 "${files[@]}"
 
-  # JOB 3 — Run application tests
-  test:
-    name: Application Tests
+  #  Terraform (AWS) — no AWS credentials used 
+  terraform-validate:
+    name: Terraform Validate (AWS)
     runs-on: ubuntu-latest
-    needs: validate
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
         with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: app/requirements.txt
+          terraform_wrapper: false
+      - name: terraform fmt -check
+        working-directory: platform/infra/terraform
+        run: terraform fmt -check -recursive
+      - name: terraform init (no backend, no state, no creds)
+        working-directory: platform/infra/terraform
+        run: terraform init -backend=false -upgrade
+      - name: terraform validate
+        working-directory: platform/infra/terraform
+        run: terraform validate
 
-      - name: Run tests
-        working-directory: app
+  #  OpenTofu (OCI) — no OCI credentials used 
+  opentofu-validate:
+    name: OpenTofu Validate (OCI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_wrapper: false
+      - name: tofu fmt -check
+        working-directory: platform/infra/OpenTofu
+        run: tofu fmt -check -recursive
+      - name: tofu init (no backend, no state, no creds)
+        working-directory: platform/infra/OpenTofu
+        run: tofu init -backend=false -upgrade
+      - name: tofu validate
+        working-directory: platform/infra/OpenTofu
+        run: tofu validate
+
+  #  Pulumi (Azure) — syntax-checked only, no Azure login/cost 
+  pulumi-validate:
+    name: Pulumi Validate (Azure)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: platform/infra/Pulumi/requirements.txt
+      - name: Install Pulumi program dependencies
+        working-directory: platform/infra/Pulumi
         run: |
-          echo "============================================================================"
-          echo "Running Application Tests"
-          echo "============================================================================"
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -m pytest tests/ --if-present 2>/dev/null || echo "ℹ️  No tests found — skipping"
+      - name: Byte-compile Pulumi program
+        working-directory: platform/infra/Pulumi
+        run: python -m py_compile main.py
 
-      - name: Run security audit
-        working-directory: app
-        run: |
-          echo "============================================================================"
-          echo "pip-audit Security Check"
-          echo "============================================================================"
-          pip install pip-audit
-          pip-audit -r requirements.txt || echo "⚠️  Audit found issues — review above"
-
-  # JOB 4 — Build & Push Docker image
-  # Runs only on push to main/develop (not on PRs)
-  build-and-push:
-    name: Build & Push Docker Image
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.force_push)
-    outputs:
-      image_tag: ${{ steps.meta.outputs.image_tag }}
-      image_digest: ${{ steps.push.outputs.digest }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU (multi-arch)
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Generate image metadata
-        id: meta
-        run: |
-          # Use git SHA for precise image tagging
-          SHORT_SHA="${{ github.sha }}"
-          SHORT_SHA="${SHORT_SHA:0:7}"
-          BRANCH="${{ github.ref_name }}"
-          BRANCH="${BRANCH//\//-}"     # replace / with -
-
-          # Tag strategy:
-          #   main branch  → latest + sha
-          #   other branch → branch-name + sha
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            IMAGE_TAG="${{ env.DOCKER_IMAGE_TAG }}"
-          else
-            IMAGE_TAG="${BRANCH}-${SHORT_SHA}"
-          fi
-
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
-          echo "branch=$BRANCH"       >> "$GITHUB_OUTPUT"
-          echo ""
-          echo "  Image: ${{ env.DOCKERHUB_USERNAME }}/${{ env.APP_NAME }}:$IMAGE_TAG"
-
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-
-      - name: Build and push
-        id: push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./app
-          file: ./app/Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.APP_NAME }}:${{ steps.meta.outputs.image_tag }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.APP_NAME }}:sha-${{ github.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.run_started_at }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Print image summary
-        run: |
-          echo "============================================================================"
-          echo "✅ Image Built and Pushed"
-          echo "============================================================================"
-          echo "  Repository: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.APP_NAME }}"
-          echo "  Tag:        ${{ steps.meta.outputs.image_tag }}"
-          echo "  Digest:     ${{ steps.push.outputs.digest }}"
-          echo ""
-          echo "  Argo CD will automatically detect this new image and deploy."
-          echo "  Monitor at: argocd app list"
-
-  # JOB 5 — Security scan on built image
-  scan-image:
-    name: Trivy Image Scan (CI)
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    if: needs.build-and-push.result == 'success'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/${{ env.APP_NAME }}:${{ needs.build-and-push.outputs.image_tag }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          exit-code: '0'
-          severity: 'HIGH,CRITICAL'
-          vuln-type: 'os,library'
-
-      - name: Upload Trivy scan results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: trivy-scan-results
-          path: trivy-results.sarif
-          retention-days: 30
-
-  # JOB 6 — Notify ArgoCD (optional webhook trigger for immediate sync)
-  notify-argocd:
-    name: Notify Argo CD
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    if: |
-      needs.build-and-push.result == 'success' &&
-      github.ref_name == 'main'
-    steps:
-      - name: Trigger ArgoCD sync via webhook
-        run: |
-          echo "============================================================================"
-          echo "Notifying Argo CD of New Image"
-          echo "============================================================================"
-          echo ""
-          echo "  Image tag: ${{ needs.build-and-push.outputs.image_tag }}"
-          echo ""
-
-          # If ARGOCD_WEBHOOK_URL is configured, trigger immediate sync
-          if [[ -n "${{ secrets.ARGOCD_WEBHOOK_URL }}" ]]; then
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              -X POST "${{ secrets.ARGOCD_WEBHOOK_URL }}" \
-              -H "Content-Type: application/json" \
-              -d '{"ref":"${{ github.ref }}","repository":{"html_url":"${{ github.server_url }}/${{ github.repository }}"}}')
-            echo "  ArgoCD webhook response: HTTP $HTTP_STATUS"
-          else
-            echo "  ℹ️  ARGOCD_WEBHOOK_URL not set — ArgoCD will poll and sync automatically"
-            echo "     (default poll interval: 3 minutes)"
-            echo ""
-            echo "  To enable instant sync, set ARGOCD_WEBHOOK_URL in GitHub Secrets."
-            echo "  Guide: https://argo-cd.readthedocs.io/en/stable/operator-manual/webhook/"
-          fi
-
-  # SUMMARY JOB — Always runs, shows pipeline outcome
-  ci-summary:
-    name: CI Summary
-    runs-on: ubuntu-latest
-    needs: [validate, lint, test, build-and-push, scan-image, notify-argocd]
+  #  Single required status check for branch protection 
+  ci-success:
+    name: CI Success
     if: always()
+    needs:
+      - load-env
+      - shellcheck
+      - yamllint
+      - python-app
+      - docker-build
+      - kubernetes-validate
+      - terraform-validate
+      - opentofu-validate
+      - pulumi-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - name: Print summary
+      - name: Fail if any dependent job failed
         run: |
-          echo "============================================================================"
-          echo "CI Pipeline Summary"
-          echo "============================================================================"
-          echo ""
-          echo "  validate:      ${{ needs.validate.result }}"
-          echo "  lint:          ${{ needs.lint.result }}"
-          echo "  test:          ${{ needs.test.result }}"
-          echo "  build-push:    ${{ needs.build-and-push.result }}"
-          echo "  scan-image:    ${{ needs.scan-image.result }}"
-          echo "  notify-argo:   ${{ needs.notify-argocd.result }}"
-          echo ""
-          echo "  Branch:        ${{ github.ref_name }}"
-          echo "  Commit:        ${{ github.sha }}"
-          echo "  Triggered by:  ${{ github.actor }}"
-          echo ""
-          echo "  ✅ Deployment is handled by Argo CD (not GitHub Actions)"
-          echo "  Monitor deployments: kubectl get applications -n argocd"
-          echo "============================================================================"
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs passed."
