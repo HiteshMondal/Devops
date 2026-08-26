@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-######################################## /platform/infra/deploy_infra.sh — Infrastructure Deployment Orchestrator
+# /platform/infra/deploy_infra.sh — Infrastructure Deployment Orchestrator
 # Supports: Terraform (AWS) + OpenTofu (OCI) + Pulumi (Azure)
 # Usage: ./deploy_infra.sh [plan|apply|destroy] [aws|oci|azure]
-#######################################
+# Should work and be compatible with all Linux computers including WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, K8s, EKS, GKE, AKS, MicroK8s or others.
+# CONFIGURATION POLICY:
+# .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
+# run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
+# This script MUST NOT independently determine the deployment environment.
+
 set -euo pipefail
 IFS=$'\n\t'
 

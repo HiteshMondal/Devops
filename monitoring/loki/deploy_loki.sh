@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # monitoring/loki/deploy_loki.sh — Deploy Loki log aggregation system
-# Should work and be compatible with all Linux computers including WSL.
-# Works in both environments: ArgoCD and direct
-# Supports all Kubernetes tools: Minikube, Kind, K3s, K8s, EKS, GKE, AKS, MicroK8s or others.
+
+# Designed to be compatible with major Linux distributions and WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, EKS, GKE, AKS, MicroK8s or others.
+# .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
+# run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
+# This script MUST NOT independently determine the deployment environment.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -99,15 +102,13 @@ verify_loki_endpoint() {
 
     print_step "Verifying Loki /ready via port-forward (local port ${local_port})..."
 
-    # Set a trap to clean up the port-forward on any exit from THIS function.
-    (
-        trap - EXIT INT TERM
+    kubectl port-forward "pod/${loki_pod}" "${local_port}:${LOKI_PORT}" \
+        -n "${LOKI_NAMESPACE}" >/dev/null 2>&1 &
 
-        kubectl port-forward "pod/${loki_pod}" "${local_port}:${LOKI_PORT}" \
-            -n "${LOKI_NAMESPACE}" >/dev/null 2>&1 &
-        _LOKI_PF_PID=$!
-        sleep 3
-    )
+    _LOKI_PF_PID=$!
+
+    sleep 3
+    
 
     local attempts=0
     local ready=false
@@ -181,6 +182,65 @@ detect_k8s_distribution() {
     print_success "Kubernetes distribution: ${K8S_DISTRIBUTION}"
 }
 
+LOKI_TEMP_DIR=""
+LOKI_RENDERED_OVERLAY=""
+
+_cleanup_loki_temp() {
+    if [[ -n "${LOKI_TEMP_DIR}" && -d "${LOKI_TEMP_DIR}" ]]; then
+        rm -rf "${LOKI_TEMP_DIR}"
+    fi
+
+    LOKI_TEMP_DIR=""
+    LOKI_RENDERED_OVERLAY=""
+}
+
+_render_loki_overlay() {
+    local overlay_dir="$1"
+
+    LOKI_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/loki-deploy.XXXXXX")
+
+    # Cleanup happens when the deployment script exits.
+    # IMPORTANT: this function must NOT be called through $(...),
+    # otherwise the EXIT trap would run in a subshell before kubectl apply.
+    trap _cleanup_loki_temp EXIT
+
+    cp -r \
+        "${PROJECT_ROOT}/monitoring/loki/base" \
+        "${LOKI_TEMP_DIR}/base"
+
+    cp -r \
+        "${PROJECT_ROOT}/monitoring/loki/overlays" \
+        "${LOKI_TEMP_DIR}/overlays"
+
+    LOKI_RENDERED_OVERLAY="${LOKI_TEMP_DIR}/overlays/${overlay_dir}"
+
+    shopt -s nullglob
+
+    local patch_file
+    for patch_file in "${LOKI_RENDERED_OVERLAY}"/*-patch.yaml; do
+        local tmp
+        tmp=$(mktemp)
+
+        envsubst < "$patch_file" > "$tmp"
+
+        if grep -qE '\$\{[A-Z_]+\}' "$tmp"; then
+            print_warning "Unsubstituted variables in $(basename "$patch_file"):"
+
+            grep -oE '\$\{[A-Z_]+\}' "$tmp" \
+                | sort -u \
+                | while read -r var; do
+                    echo -e "     ${YELLOW}* ${var}${RESET}"
+                done
+        fi
+
+        mv "$tmp" "$patch_file"
+    done
+
+    shopt -u nullglob
+
+    print_info "Rendered Loki overlay: ${LOKI_RENDERED_OVERLAY}"
+}
+
 # Main deployment
 deploy_loki() {
     print_section "LOKI LOG AGGREGATION" ">"
@@ -242,7 +302,9 @@ deploy_loki() {
     fi
 
     print_subsection "Deploying Loki & Promtail (overlay: ${overlay_dir})"
-    kubectl apply -k "${overlay_path}"
+    _render_loki_overlay "${overlay_dir}"
+
+    kubectl apply -k "${LOKI_RENDERED_OVERLAY}"
     print_success "Manifests applied"
 
     print_step "Waiting for Loki rollout..."

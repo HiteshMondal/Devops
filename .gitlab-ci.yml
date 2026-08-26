@@ -1,0 +1,377 @@
+########################################################################
+# .gitlab-ci.yml — Continuous Integration only (no deployment/CD here)
+#
+# Design goals:
+#   - Zero cost: runs entirely on GitLab.com free shared runners, no
+#     paid GitLab tier features, no cloud infra is provisioned, no
+#     images are pushed to any registry.
+#   - Reads configuration from .env / .env.example instead of hardcoding
+#     values. Real secrets must be set as masked/protected GitLab
+#     CI/CD variables (Settings > CI/CD > Variables) using the SAME
+#     variable names used in .env — the pipeline never commits secrets.
+#   - Fails fast and cheap: cheapest/fastest checks run first
+#     (lint/static analysis) before slower ones (tests, image build).
+########################################################################
+
+# GLOBAL CONFIG
+
+stages:
+  - validate
+  - lint
+  - test
+  - security
+  - build
+
+variables:
+  GIT_DEPTH: "1"                     # shallow clone — saves runner minutes
+  PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  APP_DIR: "app"
+  APP_SRC: "app/src"
+
+# Only run pipelines where they matter: merge requests, and pushes to
+# main/develop. Avoids burning free-tier minutes on every branch push
+# and avoids duplicate pipelines (branch + MR) for the same commit.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+default:
+  interruptible: true                # auto-cancel superseded pipelines
+  retry:
+    max: 1
+    when: runner_system_failure
+
+# REUSABLE SNIPPETS
+
+# Loads .env if present on the runner (useful for self-hosted/local
+# runners that mount a real .env), then falls back to whatever GitLab
+# CI/CD variables are already injected into the job environment.
+# Real secrets should NEVER be committed — this is a convenience layer,
+# not a way to smuggle secrets into git.
+.load_dotenv: &load_dotenv |
+  if [ -f .env ]; then
+    echo "Loading variables from .env"
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  else
+    echo ".env not present on runner — relying on GitLab CI/CD variables"
+  fi
+
+.pip_cache: &pip_cache
+  key:
+    files:
+      - app/requirements.txt
+  paths:
+    - .cache/pip
+  policy: pull-push
+
+# STAGE: validate — cheap structural/static checks, no dependencies
+
+env-hygiene-check:
+  stage: validate
+  image: alpine:3.20
+  script:
+    - echo "Checking that .env is never committed to git..."
+    - |
+      if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+        echo "FATAL: .env is tracked by git. Remove it and add to .gitignore." >&2
+        exit 1
+      fi
+      echo "OK: .env is not tracked."
+    - echo "Checking .env.example exists and documents required keys..."
+    - test -f .env.example || (echo "FATAL: .env.example missing" >&2; exit 1)
+    - echo "OK: .env.example present ($(grep -cE '^[A-Z_]+=' .env.example) keys documented)."
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+shellcheck:
+  stage: validate
+  image: koalaman/shellcheck-alpine:v0.10.0
+  script:
+    - echo "Running shellcheck on all shell scripts..."
+    - |
+      find . \
+        -path ./.git -prune -o \
+        -path './platform/infra/terraform/.terraform' -prune -o \
+        -name '*.sh' -print \
+        > /tmp/shell_files.txt
+    - cat /tmp/shell_files.txt
+    - xargs -a /tmp/shell_files.txt shellcheck -S warning
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/*.sh"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+yaml-lint:
+  stage: validate
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet yamllint
+  script:
+    - |
+      yamllint -d "{extends: default, rules: {line-length: {max: 140}, document-start: disable}}" \
+        monitoring platform .gitlab-ci.yml 2>/dev/null || \
+      yamllint -d "{extends: default, rules: {line-length: {max: 140}, document-start: disable}}" \
+        monitoring platform .gitlab-ci.yml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/*.yaml"
+        - "**/*.yml"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+terraform-validate:
+  stage: validate
+  image: hashicorp/terraform:1.9
+  script:
+    - cd platform/infra/terraform
+    - terraform init -backend=false -input=false
+    - terraform validate
+    - terraform fmt -check -recursive
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "platform/infra/terraform/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+  allow_failure: true   # infra formatting shouldn't block app CI
+
+k8s-manifest-validate:
+  stage: validate
+  image: ghcr.io/yannh/kubeconform:latest-alpine
+  script:
+    - echo "Validating base + overlay manifests with kubeconform..."
+    - |
+      for overlay in local prod; do
+        dir="platform/deployment/kubernetes/overlays/${overlay}"
+        if [ -d "$dir" ]; then
+          echo "== ${overlay} =="
+          /kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.29.0 \
+            $(find platform/deployment/kubernetes/base "$dir" -name '*.yaml' -o -name '*.yml') || true
+        fi
+      done
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "platform/deployment/kubernetes/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+  allow_failure: true   # manifests are patched at deploy-time; treat as advisory in CI
+
+# STAGE: lint — code style / static quality
+
+python-lint:
+  stage: lint
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet ruff black isort
+  script:
+    - ruff check ${APP_SRC}
+    - black --check ${APP_SRC}
+    - isort --check-only ${APP_SRC}
+  cache:
+    <<: *pip_cache
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+dockerfile-lint:
+  stage: lint
+  image: hadolint/hadolint:2.12.0-debian
+  script:
+    - hadolint app/Dockerfile
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/Dockerfile"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# STAGE: test — unit tests against a disposable, free Postgres service
+
+unit-tests:
+  stage: test
+  image: python:3.12-slim
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    # Test-only credentials for the ephemeral CI Postgres service.
+    # These are NOT the real .env values — they exist only for the
+    # lifetime of this job's service container.
+    POSTGRES_DB: "${DB_NAME:-devopsdb}"
+    POSTGRES_USER: "${DB_USERNAME:-devops}"
+    POSTGRES_PASSWORD: "${DB_PASSWORD:-ci_test_password}"
+    DB_HOST: postgres
+    DB_PORT: "5432"
+  before_script:
+    - *load_dotenv
+    - pip install --quiet -r ${APP_DIR}/requirements.txt
+    - pip install --quiet pytest pytest-cov
+  script:
+    - echo "Running test suite against ephemeral Postgres service..."
+    - |
+      cd ${APP_DIR}
+      pytest \
+        --junitxml=../report.xml \
+        --cov=src \
+        --cov-report=xml:../coverage.xml \
+        --cov-report=term \
+        || TEST_STATUS=$?
+      exit ${TEST_STATUS:-0}
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 7 days
+  cache:
+    <<: *pip_cache
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# STAGE: security — free, self-contained scanners (no GitLab paid tier
+# security features are used here)
+
+dependency-scan:
+  stage: security
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet pip-audit
+  script:
+    - pip-audit -r ${APP_DIR}/requirements.txt --strict || true
+    - pip-audit -r ${APP_DIR}/requirements.txt -f json -o pip-audit-report.json
+  artifacts:
+    when: always
+    paths:
+      - pip-audit-report.json
+    expire_in: 7 days
+  allow_failure: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/requirements.txt"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+sast-bandit:
+  stage: security
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet bandit
+  script:
+    - bandit -r ${APP_SRC} -f json -o bandit-report.json || true
+    - bandit -r ${APP_SRC} -ll
+  artifacts:
+    when: always
+    paths:
+      - bandit-report.json
+    expire_in: 7 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+secret-scan:
+  stage: security
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks detect --source . --no-git --redact --exit-code 1 --report-path gitleaks-report.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+    expire_in: 7 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+filesystem-vuln-scan:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy fs --scanners vuln,secret,misconfig --exit-code 0 --severity HIGH,CRITICAL --format table ${APP_DIR}
+  allow_failure: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# STAGE: build — validate the container image builds cleanly.
+# Image is built and scanned ONLY, never pushed to any registry, so
+# this incurs no registry/storage cost and needs no push credentials.
+
+container-build-validate:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    IMAGE_NAME: "ci-validate/${CI_PROJECT_NAME}"
+    IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
+  before_script:
+    - *load_dotenv
+    - docker info
+  script:
+    - echo "Building image locally for validation (no push)..."
+    - docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" ${APP_DIR}
+    - docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
+    - echo "Build OK — image not pushed anywhere, no registry cost incurred."
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+container-image-scan:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  needs:
+    - container-build-validate
+  variables:
+    IMAGE_NAME: "ci-validate/${CI_PROJECT_NAME}"
+    IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
+  before_script:
+    - apk add --no-cache curl
+    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+    - docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" ${APP_DIR}
+  script:
+    - trivy image --exit-code 0 --severity HIGH,CRITICAL --format table "${IMAGE_NAME}:${IMAGE_TAG}"
+  allow_failure: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "app/**/*"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'

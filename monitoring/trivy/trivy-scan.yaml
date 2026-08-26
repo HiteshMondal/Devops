@@ -6,7 +6,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: trivy-operator
-  namespace: trivy-system
+  namespace: trivy
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -47,13 +47,13 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: trivy-operator
-  namespace: trivy-system
+  namespace: trivy
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: trivy-config
-  namespace: trivy-system
+  namespace: trivy
 data:
   trivy.yaml: |
     scanners:
@@ -76,7 +76,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: trivy-cache-pvc
-  namespace: trivy-system
+  namespace: trivy
 spec:
   accessModes:
     - ReadWriteOnce
@@ -88,7 +88,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: trivy-reports-pvc
-  namespace: trivy-system
+  namespace: trivy
 spec:
   accessModes:
     - ReadWriteMany
@@ -100,7 +100,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: trivy-scan
-  namespace: trivy-system
+  namespace: trivy
 spec:
   schedule: "0 16-22 * * *"
   timeZone: "Asia/Kolkata"
@@ -120,7 +120,7 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: trivy
-            image: hiteshmondaldocker/trivy-runner:1.0
+            image: hiteshmondaldocker/trivy-runner:1.1
             env:
             - name: TRIVY_SEVERITY
               value: "HIGH,CRITICAL"
@@ -149,7 +149,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: trivy-initial-scan
-  namespace: trivy-system
+  namespace: trivy
   labels:
     app: trivy
 spec:
@@ -168,7 +168,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: trivy
-        image: hiteshmondaldocker/trivy-runner:1.0
+        image: hiteshmondaldocker/trivy-runner:1.1
         command:
         - /bin/sh
         - -c

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # monitoring/trivy/trivy.sh — Deploy Trivy security scanner with Metrics Exporter.
-# Should work and be compatible with all Linux computers including WSL.
-# Works in both environments: ArgoCD and direct
-# Supports all Kubernetes tools: Minikube, Kind, K3s, K8s, EKS, GKE, AKS, MicroK8s or others.
-# Usage: ./trivy.sh
+
+# Designed to be compatible with major Linux distributions and WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, EKS, GKE, AKS, MicroK8s or others.
+# .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
+# run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
+# This script MUST NOT independently determine the deployment environment.
 
 set -euo pipefail
 
@@ -28,8 +30,7 @@ source "${PROJECT_ROOT}/platform/lib/logging.sh"
 : "${TRIVY_BUILD_IMAGES:=false}"
 : "${TRIVY_SCAN_SCHEDULE:=0 16-22 * * *}"
 : "${TRIVY_SEVERITY:=HIGH,CRITICAL}"
-: "${TRIVY_METRICS_PORT:=8082}"
-: "${TRIVY_NAMESPACE:=trivy-system}"
+: "${TRIVY_NAMESPACE:=trivy}"
 : "${TRIVY_VERSION:=0.57.1}"
 : "${TRIVY_IMAGE_TAG:=1.1}"
 : "${PROMETHEUS_PORT:=9090}"
@@ -39,10 +40,7 @@ source "${PROJECT_ROOT}/platform/lib/logging.sh"
 : "${TRIVY_CPU_LIMIT:=2000m}"
 : "${TRIVY_MEMORY_REQUEST:=512Mi}"
 : "${TRIVY_MEMORY_LIMIT:=2Gi}"
-: "${TRIVY_METRICS_ENABLED:=true}"
-: "${TRIVY_BUILD_IMAGES:=true}"
-: "${TRIVY_IMAGE_TAG:=1.0}"
-: "${TRIVY_METRICS_PORT:=8082}"
+: "${TRIVY_EXPORTER_PORT:=8082}"
 
 
 # BUILD & PUSH IMAGES
@@ -246,7 +244,7 @@ trivy_main() {
     print_kv "Build Images"     "${TRIVY_BUILD_IMAGES}"
     print_kv "Scan Schedule"    "${TRIVY_SCAN_SCHEDULE}"
     print_kv "Severity Filter"  "${TRIVY_SEVERITY}"
-    print_kv "Metrics Port"     "${TRIVY_METRICS_PORT}"
+    print_kv "Metrics Port"     "${TRIVY_EXPORTER_PORT}"
     echo ""
 
     build_trivy_images
@@ -263,8 +261,8 @@ trivy_main() {
     print_access_box "TRIVY METRICS ACCESS" ">" \
         "NOTE:Three steps to verify Trivy is scraping and exporting metrics" \
         "SEP:" \
-        "CMD:Step 1  --  Start port-forward:|kubectl port-forward -n ${TRIVY_NAMESPACE} svc/trivy-exporter ${TRIVY_METRICS_PORT}:${TRIVY_METRICS_PORT}" \
-        "CMD:Step 2  --  Query metrics endpoint:|curl http://localhost:${TRIVY_METRICS_PORT}/metrics | grep trivy" \
+        "CMD:Step 1  --  Start port-forward:|kubectl port-forward -n ${TRIVY_NAMESPACE} svc/trivy-exporter ${TRIVY_EXPORTER_PORT}:${TRIVY_EXPORTER_PORT}" \
+        "CMD:Step 2  --  Query metrics endpoint:|curl http://localhost:${TRIVY_EXPORTER_PORT}/metrics | grep trivy" \
         "SEP:" \
         "CMD:Step 3  --  Open Prometheus targets:|kubectl port-forward -n ${PROMETHEUS_NAMESPACE} svc/${PROM_SERVICE} ${PROMETHEUS_PORT}:${PROMETHEUS_PORT}"
 

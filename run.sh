@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # run.sh — DevOps Platform Deployment Runner
-# Should work and be compatible with all Linux computers including WSL.
-# Works in both environments: ArgoCD and direct
-# Supports all Kubernetes tools: Minikube, Kind, K3s, K8s, EKS, GKE, AKS, MicroK8s or others.
+
+# Designed to be compatible with major Linux distributions and WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, EKS, GKE, AKS, MicroK8s or others.
+# .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
+# run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
+# This script MUST NOT independently determine the deployment environment.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -185,16 +188,20 @@ select_environment() {
     case "$REPLY" in
         1)
             DEPLOY_TARGET="local"
+            APP_ENV="local"
             ;;
 
         2)
             DEPLOY_TARGET="prod"
+            APP_ENV="production"
             ;;
     esac
 
     export DEPLOY_TARGET
+    export APP_ENV
 
     print_success "Environment selected: ${BOLD}${DEPLOY_TARGET^^}${RESET}"
+    print_success "Application environment: ${BOLD}${APP_ENV}${RESET}"
 }
 
 # STEP 2 — ENVIRONMENT SERVICE PROFILE
@@ -469,12 +476,22 @@ deploy_image() {
 }
 
 deploy_argo() {
+    if [[ "${DEPLOY_TARGET:-}" != "prod" ]]; then
+        print_error "ArgoCD deployment is production-only"
+        exit 1
+    fi
+
     _run_step \
         "Argo CD" \
         "$PROJECT_ROOT/platform/cicd/argo/deploy_argo.sh"
 }
 
 deploy_kubernetes() {
+    if [[ "${DEPLOY_TARGET:-}" != "local" ]]; then
+        print_error "Direct Kubernetes deployment is local-only"
+        exit 1
+    fi
+
     _run_step \
         "Kubernetes App" \
         "$PROJECT_ROOT/platform/deployment/kubernetes/deploy_kubernetes.sh"

@@ -195,7 +195,7 @@ data:
 
       - job_name: 'trivy'
         static_configs:
-          - targets: ['trivy-exporter.trivy-system.svc.cluster.local:8082']
+          - targets: ['trivy-exporter.trivy.svc.cluster.local:8082']
 ---
 
 apiVersion: v1

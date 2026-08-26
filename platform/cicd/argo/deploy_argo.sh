@@ -2,6 +2,12 @@
 # /platform/cicd/argo/deploy_argo.sh — Argo CD Deployment Script
 # Usage: source in run.sh, then call deploy_argo
 #        Or run directly: ./deploy_argo.sh
+# Should work and be compatible with all Linux computers including WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, K8s, EKS, GKE, AKS, MicroK8s or others.
+# CONFIGURATION POLICY:
+# .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
+# run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
+# This script MUST NOT independently determine the deployment environment.
 
 set -euo pipefail
 
@@ -200,12 +206,14 @@ argocd_login() {
         -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
 
     if [[ -z "$ARGOCD_SERVER" ]]; then
-        local SERVICE_PORT
-        SERVICE_PORT=$(kubectl get svc argocd-server -n "$ARGOCD_NAMESPACE" \
-            -o jsonpath='{.spec.ports[?(@.name=="https")].port}' 2>/dev/null || echo "")
-        [[ -z "$SERVICE_PORT" ]] && \
-        SERVICE_PORT=$(kubectl get svc argocd-server -n "$ARGOCD_NAMESPACE" \
-            -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "443")
+        local SERVICE_PORT="${ARGOCD_SERVER_PORT:-}"
+        if [[ -z "$SERVICE_PORT" ]]; then
+            SERVICE_PORT=$(kubectl get svc argocd-server -n "$ARGOCD_NAMESPACE" \
+                -o jsonpath='{.spec.ports[?(@.name=="https")].port}' 2>/dev/null || echo "")
+            [[ -z "$SERVICE_PORT" ]] && \
+            SERVICE_PORT=$(kubectl get svc argocd-server -n "$ARGOCD_NAMESPACE" \
+                -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "443")
+        fi
 
         print_step "Starting port-forward: localhost:${ARGOCD_LOCAL_PORT} -> argocd-server:${SERVICE_PORT}"
         kubectl port-forward svc/argocd-server -n "$ARGOCD_NAMESPACE" \
