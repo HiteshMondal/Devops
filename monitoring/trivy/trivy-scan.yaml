@@ -143,7 +143,8 @@ spec:
             persistentVolumeClaim:
               claimName: trivy-reports-pvc
           - name: trivy-cache
-            emptyDir: {}
+            persistentVolumeClaim:
+              claimName: trivy-cache-pvc
 ---
 apiVersion: batch/v1
 kind: Job
@@ -204,4 +205,5 @@ spec:
         persistentVolumeClaim:
           claimName: trivy-reports-pvc
       - name: trivy-cache
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: trivy-cache-pvc

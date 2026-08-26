@@ -1,248 +1,264 @@
 """
-infra/Pulumi/main.py — Azure Free Tier Infrastructure (Pulumi / Python)
+platform/infra/pulumi — Azure infrastructure for the DevOps platform.
 
-Resources provisioned (100% Azure free tier / Always Free):
+Provisions (all sized to stay inside Azure's free-tier / free-for-12-months
+allowances wherever Azure offers one):
   - Resource Group
-  - Virtual Network + Subnet
-  - AKS Free Tier cluster  (1 node — Standard_B2s, free control plane)
-  - Azure Container Registry Basic (cheapest paid tier — skip if SKIP_ACR=true)
-  - Azure Database for PostgreSQL Flexible Server (Burstable B1ms — cheapest tier)
-  - Kubernetes Secret  → DB credentials injected into the app namespace
+  - Virtual Network with two delegated subnets (AKS, PostgreSQL)
+  - AKS cluster   — Free control-plane tier, single Burstable B-series node
+  - Azure Database for PostgreSQL Flexible Server — Burstable B1ms
+    (the SKU Azure lists under "free for 12 months"), VNet-integrated,
+    no public endpoint, no HA, 7-day backups (cheapest safe baseline)
 
-Environment variables / Pulumi config keys consumed:
-  APP_NAME             app / cluster name prefix
-  NAMESPACE            Kubernetes namespace
-  DOCKERHUB_USERNAME   DockerHub username (used in k8s secret)
-  DOCKER_IMAGE_TAG     image tag
-  APP_PORT             application port
-  DB_USERNAME          Postgres admin username
-  DB_PASSWORD          Postgres admin password  (use `pulumi config set --secret`)
-  AZURE_LOCATION       Azure region  (default: eastus)
-  SKIP_ACR             "true" to skip ACR  (saves ~$0.17/GiB storage cost)
+STANDALONE BY DESIGN
+---------------------
+This program does not import run.sh, or any sibling
+Terraform/OpenTofu code. Its only external dependency is the project's
+.env file, which it locates itself (see env_loader.py). That means:
+  - You can `cd platform/infra/pulumi && pulumi up` directly.
+  - Renaming/editing terraform/, OpenTofu/, monitoring/, app/, etc. has
+    zero effect on this program.
+  - All ports, names and secrets come from .env (or Pulumi config as an
+    override) — never hard-coded — so there is a single source of truth
+    and no drift between clouds.
 """
 
-import os
+import uuid
+
 import pulumi
-import pulumi_azure_native as azure
-from pulumi_azure_native import resources, network, containerservice, dbforpostgresql
-from pulumi_kubernetes import Provider as K8sProvider
-import pulumi_kubernetes as k8s
-import base64
+from pulumi import Output, ResourceOptions
+from pulumi_azure_native import authorization, containerservice, dbforpostgresql, network, resources
 
-# CONFIG
+from env_loader import load_env
 
-cfg = pulumi.Config()
+# Configuration — .env is authoritative, Pulumi config can override either,
+# hard-coded defaults only apply when neither source sets a value.
+load_env()
+stack_config = pulumi.Config()
 
-app_name        = cfg.get("app_name")        or os.environ.get("APP_NAME",           "devops-app")
-namespace_name  = cfg.get("namespace")       or os.environ.get("NAMESPACE",           "devops-app")
-dh_username     = cfg.get("dockerhub_username") or os.environ.get("DOCKERHUB_USERNAME", "")
-image_tag       = cfg.get("docker_image_tag") or os.environ.get("DOCKER_IMAGE_TAG",   "latest")
-app_port_str    = cfg.get("app_port")        or os.environ.get("APP_PORT",            "3000")
-app_port        = int(app_port_str)
 
-db_username     = cfg.get("db_username")     or os.environ.get("DB_USERNAME",         "devops_admin")
-db_password     = cfg.get_secret("db_password") or os.environ.get("DB_PASSWORD",      "ChangeMe!Prod2024")
+def get_env(key: str, default: str | None = None, required: bool = False) -> str:
+    """Pulumi config (`pulumi config set <key>`) wins over .env / process env,
+    which wins over the supplied default."""
+    value = stack_config.get(key) or __import__("os").environ.get(key) or default
+    if required and not value:
+        raise Exception(
+            f"'{key}' is not set. Add it to .env, or run: pulumi config set {key} <value>"
+        )
+    return value
 
-location        = cfg.get("azure_location")  or os.environ.get("AZURE_LOCATION",      "eastus")
-skip_acr        = (cfg.get("skip_acr") or os.environ.get("SKIP_ACR", "false")).lower() == "true"
 
-# Derived names — keep them short for Azure's 24-char limits on some resources
-safe_name   = app_name.replace("_", "-")[:16]
-db_srv_name = f"{safe_name}-pg"
-aks_name    = f"{safe_name}-aks"
-rg_name     = f"{safe_name}-rg"
-vnet_name   = f"{safe_name}-vnet"
-acr_name    = (safe_name.replace("-", "") + "acr")[:24]   # ACR names: alphanumeric only
+def get_secret(key: str, default: str | None = None, required: bool = False) -> Output[str]:
+    """Same resolution order as get_env(), but always returned as a Pulumi
+    secret so it never appears in plaintext state/CLI output. Prefer
+    `pulumi config set --secret <key> <value>` over storing secrets in .env
+    for anything beyond local/dev use."""
+    value = stack_config.get_secret(key) or __import__("os").environ.get(key) or default
+    if required and not value:
+        raise Exception(
+            f"'{key}' is not set. Add it to .env, or run: pulumi config set --secret {key} <value>"
+        )
+    return Output.secret(value) if not isinstance(value, Output) else value
 
-# RESOURCE GROUP
 
+# App identity / naming
+app_name = get_env("APP_NAME", "devops-app")
+env_name = get_env("APP_ENV", "production")
+
+# Azure placement — not present in the shared .env by default (Azure-specific);
+# add AZURE_LOCATION to .env to override across every run without touching code.
+location = get_env("AZURE_LOCATION", "eastus")
+
+# AKS sizing — deliberately small/burstable to minimize spend.
+aks_vm_size = get_env("AZURE_AKS_VM_SIZE", "Standard_B2s")
+aks_node_count = int(get_env("AZURE_AKS_NODE_COUNT", "1"))
+aks_min_count = int(get_env("MIN_REPLICAS", "1"))
+aks_max_count = int(get_env("MAX_REPLICAS", "3"))
+kubernetes_version = get_env("AZURE_AKS_VERSION", "")  # "" = let Azure pick default
+
+# PostgreSQL Flexible Server — Burstable B1ms is Azure's free-tier-eligible SKU.
+db_name = get_env("DB_NAME", "devopsdb")
+db_admin_user = get_env("DB_USERNAME", "devops", required=True)
+db_admin_password = get_secret("DB_PASSWORD", required=True)
+db_sku_name = get_env("AZURE_POSTGRES_SKU", "Standard_B1ms")
+db_storage_gb = int(get_env("AZURE_POSTGRES_STORAGE_GB", "32"))
+db_version = get_env("AZURE_POSTGRES_VERSION", "16")
+
+common_tags = {
+    "app": app_name,
+    "environment": env_name,
+    "managed-by": "pulumi",
+}
+
+# Resource Group
 rg = resources.ResourceGroup(
-    rg_name,
-    resource_group_name=rg_name,
+    f"{app_name}-rg",
+    resource_group_name=f"{app_name}-{env_name}-rg",
     location=location,
-    tags={
-        "project":     app_name,
-        "environment": "prod",
-        "managed-by":  "pulumi",
-    },
+    tags=common_tags,
 )
 
-# VIRTUAL NETWORK + SUBNET
-
+# Networking — one VNet, one subnet for AKS nodes, one delegated subnet for
+# PostgreSQL Flexible Server VNet integration (keeps the DB off the public
+# internet at zero extra networking cost).
 vnet = network.VirtualNetwork(
-    vnet_name,
+    f"{app_name}-vnet",
     resource_group_name=rg.name,
-    virtual_network_name=vnet_name,
-    location=location,
-    address_space=network.AddressSpaceArgs(
-        address_prefixes=["10.0.0.0/16"],
-    ),
-    tags={"project": app_name},
+    location=rg.location,
+    virtual_network_name=f"{app_name}-vnet",
+    address_space=network.AddressSpaceArgs(address_prefixes=["10.20.0.0/16"]),
+    tags=common_tags,
 )
 
-subnet = network.Subnet(
-    f"{safe_name}-subnet",
+aks_subnet = network.Subnet(
+    f"{app_name}-aks-subnet",
     resource_group_name=rg.name,
     virtual_network_name=vnet.name,
-    subnet_name=f"{safe_name}-subnet",
-    address_prefix="10.0.1.0/24",
+    subnet_name="aks-subnet",
+    address_prefix="10.20.0.0/20",
 )
 
-# AZURE CONTAINER REGISTRY  (optional — skip with SKIP_ACR=true)
-
-acr = None
-if not skip_acr:
-    from pulumi_azure_native import containerregistry
-    acr = containerregistry.Registry(
-        acr_name,
-        registry_name=acr_name,
-        resource_group_name=rg.name,
-        location=location,
-        sku=containerregistry.SkuArgs(name="Basic"),   # cheapest paid SKU
-        admin_user_enabled=True,
-        tags={"project": app_name},
-    )
-
-# AKS — FREE TIER  (control plane free, 1× Standard_B2s node ~$30/mo)
-# Free tier: skuTier="Free" → no SLA, but $0 control plane cost.
-# Standard_B2s is the smallest burstable node that runs a realistic workload.
-# node_count=1 keeps cost minimal.
-
-aks = containerservice.ManagedCluster(
-    aks_name,
+db_subnet = network.Subnet(
+    f"{app_name}-db-subnet",
     resource_group_name=rg.name,
-    resource_name_=aks_name,
-    location=location,
-    sku=containerservice.ManagedClusterSKUArgs(
-        name="Base",
-        tier="Free",         # Free control plane
-    ),
-    dns_prefix=safe_name,
+    virtual_network_name=vnet.name,
+    subnet_name="postgres-subnet",
+    address_prefix="10.20.16.0/24",
+    delegations=[
+        network.DelegationArgs(
+            name="postgresFlexibleServerDelegation",
+            service_name="Microsoft.DBforPostgreSQL/flexibleServers",
+        )
+    ],
+    opts=ResourceOptions(depends_on=[aks_subnet]),
+)
+
+private_dns_zone = network.PrivateZone(
+    f"{app_name}-pg-dns-zone",
+    resource_group_name=rg.name,
+    private_zone_name=f"{app_name}.private.postgres.database.azure.com",
+    location="global",
+    tags=common_tags,
+)
+
+dns_vnet_link = network.VirtualNetworkLink(
+    f"{app_name}-pg-dns-link",
+    resource_group_name=rg.name,
+    private_zone_name=private_dns_zone.name,
+    virtual_network_link_name=f"{app_name}-pg-dns-link",
+    location="global",
+    virtual_network=network.SubResourceArgs(id=vnet.id),
+    registration_enabled=False,
+)
+
+# AKS Cluster
+#   - "Free" SKU tier -> control plane has no hourly charge.
+#   - kubenet + custom VNet keeps IP usage minimal (vs. Azure CNI).
+#   - System-assigned identity; granted Network Contributor on the AKS
+#     subnet so kubenet can manage routes (required for BYO-VNet + kubenet).
+aks_cluster = containerservice.ManagedCluster(
+    f"{app_name}-aks",
+    resource_group_name=rg.name,
+    resource_name_=f"{app_name}-{env_name}-aks",
+    location=rg.location,
+    dns_prefix=f"{app_name}-{env_name}",
+    kubernetes_version=kubernetes_version or None,
+    sku=containerservice.ManagedClusterSKUArgs(name="Base", tier="Free"),
+    identity=containerservice.ManagedClusterIdentityArgs(type="SystemAssigned"),
     enable_rbac=True,
     network_profile=containerservice.ContainerServiceNetworkProfileArgs(
-        network_plugin="azure",
-        network_policy="azure",
-        service_cidr="10.96.0.0/16",
-        dns_service_ip="10.96.0.10",
+        network_plugin="kubenet",
+        load_balancer_sku="standard",
     ),
     agent_pool_profiles=[
         containerservice.ManagedClusterAgentPoolProfileArgs(
-            name="nodepool1",
-            count=1,
-            vm_size="Standard_B2s",       # 2 vCPU / 4 GiB — cheapest usable size
-            os_disk_size_gb=30,
-            os_disk_type="Managed",
-            type="VirtualMachineScaleSets",
+            name="system",
             mode="System",
-            vnet_subnet_id=subnet.id,
-            enable_auto_scaling=False,    # manual control — no surprise scaling cost
+            os_type="Linux",
+            type="VirtualMachineScaleSets",
+            vm_size=aks_vm_size,
+            count=aks_node_count,
+            enable_auto_scaling=True,
+            min_count=aks_min_count,
+            max_count=aks_max_count,
+            vnet_subnet_id=aks_subnet.id,
             max_pods=30,
-        ),
+        )
     ],
-    identity=containerservice.ManagedClusterIdentityArgs(
-        type="SystemAssigned",
-    ),
-    tags={
-        "project":     app_name,
-        "environment": "prod",
-        "managed-by":  "pulumi",
-    },
+    tags=common_tags,
+    opts=ResourceOptions(depends_on=[aks_subnet]),
 )
 
-# POSTGRESQL FLEXIBLE SERVER  (Burstable B1ms — cheapest tier, ~$12/mo)
-# Azure Free Account gives 750h/mo of Burstable B1ms for 12 months.
-# storage_size_gb=32 is the minimum allowed.
+# Grant the cluster's managed identity Network Contributor on its own subnet
+# (required whenever AKS uses kubenet with a customer-supplied VNet subnet).
+client_config = authorization.get_client_config()
+network_contributor_role_id = (
+    f"/subscriptions/{client_config.subscription_id}"
+    "/providers/Microsoft.Authorization/roleDefinitions"
+    "/4d97b98b-1d4f-4787-a291-c67834d212e7"  # built-in "Network Contributor"
+)
 
-postgres = dbforpostgresql.Server(
-    db_srv_name,
+aks_network_role_assignment = authorization.RoleAssignment(
+    f"{app_name}-aks-network-contributor",
+    role_assignment_name=str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{app_name}-aks-network-contributor")),
+    scope=aks_subnet.id,
+    role_definition_id=network_contributor_role_id,
+    principal_id=aks_cluster.identity.apply(lambda i: i.principal_id if i else ""),
+    principal_type="ServicePrincipal",
+    opts=ResourceOptions(depends_on=[aks_cluster]),
+)
+
+# PostgreSQL Flexible Server (Burstable, VNet-integrated, single AZ)
+pg_server = dbforpostgresql.Server(
+    f"{app_name}-pg",
     resource_group_name=rg.name,
-    server_name=db_srv_name,
-    location=location,
-    sku=dbforpostgresql.SkuArgs(
-        name="Standard_B1ms",
-        tier="Burstable",    # cheapest compute tier
+    server_name=f"{app_name}-{env_name}-pg".replace("_", "-"),
+    location=rg.location,
+    version=db_version,
+    administrator_login=db_admin_user,
+    administrator_login_password=db_admin_password,
+    sku=dbforpostgresql.SkuArgs(name=db_sku_name, tier="Burstable"),
+    storage=dbforpostgresql.StorageArgs(storage_size_gb=db_storage_gb),
+    backup=dbforpostgresql.BackupArgs(backup_retention_days=7, geo_redundant_backup="Disabled"),
+    high_availability=dbforpostgresql.HighAvailabilityArgs(mode="Disabled"),
+    network=dbforpostgresql.NetworkArgs(
+        delegated_subnet_resource_id=db_subnet.id,
+        private_dns_zone_arm_resource_id=private_dns_zone.id,
     ),
-    storage=dbforpostgresql.StorageArgs(
-        storage_size_gb=32,  # minimum allowed
-    ),
-    administrator_login=db_username,
-    administrator_login_password=db_password,
-    version="15",
-    backup=dbforpostgresql.BackupArgs(
-        backup_retention_days=7,
-        geo_redundant_backup="Disabled",   # geo-redundant costs extra
-    ),
-    high_availability=dbforpostgresql.HighAvailabilityArgs(
-        mode="Disabled",                   # HA doubles compute cost
-    ),
-    availability_zone="1",
-    tags={"project": app_name},
-    # lifecycle equivalent: protect from accidental destroy
-    opts=pulumi.ResourceOptions(protect=True),
+    create_mode="Default",
+    tags=common_tags,
+    opts=ResourceOptions(depends_on=[dns_vnet_link]),
 )
 
-# Firewall rule — allow Azure services (AKS) to reach Postgres
-pg_fw = dbforpostgresql.FirewallRule(
-    f"{db_srv_name}-fw-azure",
+pg_database = dbforpostgresql.Database(
+    f"{app_name}-pg-db",
     resource_group_name=rg.name,
-    server_name=postgres.name,
-    firewall_rule_name="AllowAzureServices",
-    start_ip_address="0.0.0.0",
-    end_ip_address="0.0.0.0",
+    server_name=pg_server.name,
+    database_name=db_name,
+    charset="UTF8",
+    collation="en_US.utf8",
 )
 
-# KUBERNETES PROVIDER (uses AKS-generated kubeconfig)
-
-# Retrieve admin kubeconfig from AKS
-kubeconfig = pulumi.Output.all(rg.name, aks.name).apply(
-    lambda args: containerservice.list_managed_cluster_admin_credentials(
+# Cluster credentials (kubeconfig) — fetched post-creation, exported as secret
+kubeconfig = Output.all(rg.name, aks_cluster.name).apply(
+    lambda args: containerservice.list_managed_cluster_user_credentials(
         resource_group_name=args[0],
         resource_name=args[1],
     )
-).apply(lambda creds: base64.b64decode(creds.kubeconfigs[0].value).decode("utf-8"))
-
-k8s_provider = K8sProvider(
-    "aks-k8s-provider",
-    kubeconfig=kubeconfig,
+)
+kubeconfig_raw = kubeconfig.apply(
+    lambda creds: __import__("base64").b64decode(creds.kubeconfigs[0].value).decode("utf-8")
 )
 
-# KUBERNETES — NAMESPACE
-
-ns = k8s.core.v1.Namespace(
-    namespace_name,
-    metadata=k8s.meta.v1.ObjectMetaArgs(name=namespace_name),
-    opts=pulumi.ResourceOptions(provider=k8s_provider),
-)
-
-# KUBERNETES — DB CREDENTIALS SECRET
-
-db_host = pulumi.Output.concat(postgres.name, ".postgres.database.azure.com")
-
-db_secret = k8s.core.v1.Secret(
-    f"{app_name}-db-secret",
-    metadata=k8s.meta.v1.ObjectMetaArgs(
-        name=f"{app_name}-db-secret",
-        namespace=ns.metadata.name,
-    ),
-    string_data={
-        "DB_HOST":     db_host,
-        "DB_PORT":     "5432",
-        "DB_NAME":     app_name.replace("-", "_"),
-        "DB_USERNAME": db_username,
-        "DB_PASSWORD": db_password,
-    },
-    opts=pulumi.ResourceOptions(provider=k8s_provider, depends_on=[ns]),
-)
-
-# OUTPUTS
-
-pulumi.export("resource_group",    rg.name)
-pulumi.export("aks_cluster_name",  aks.name)
-pulumi.export("aks_node_pool_vm",  "Standard_B2s")
-pulumi.export("postgres_host",     db_host)
-pulumi.export("postgres_port",     "5432")
-pulumi.export("location",          location)
-pulumi.export("kubeconfig",        pulumi.Output.secret(kubeconfig))
-
-if acr:
-    pulumi.export("acr_login_server", acr.login_server)
+# Outputs
+pulumi.export("resource_group", rg.name)
+pulumi.export("location", location)
+pulumi.export("aks_cluster_name", aks_cluster.name)
+pulumi.export("aks_kube_config", Output.secret(kubeconfig_raw))
+pulumi.export("postgres_server_name", pg_server.name)
+pulumi.export("postgres_fqdn", pg_server.fully_qualified_domain_name)
+pulumi.export("postgres_database", pg_database.name)
+connection_string = Output.all(
+    pg_server.fully_qualified_domain_name, db_admin_user, db_admin_password, db_name
+).apply(lambda a: f"postgresql://{a[1]}:{a[2]}@{a[0]}:5432/{a[3]}?sslmode=require")
+pulumi.export("postgres_connection_string", Output.secret(connection_string))

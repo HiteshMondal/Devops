@@ -1,0 +1,10 @@
+name: devops-platform-azure
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: >-
+  Azure infrastructure (AKS + PostgreSQL Flexible Server) for the DevOps
+  platform, sized to Azure's free-tier / first-12-months allowances.
+  Standalone: config comes from .env (auto-discovered) or `pulumi config`,
+  never from other files in this repo.

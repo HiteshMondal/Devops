@@ -2,9 +2,9 @@
 # /platform/infra/deploy_infra.sh — Infrastructure Deployment Orchestrator
 # Supports: Terraform (AWS) + OpenTofu (OCI) + Pulumi (Azure)
 # Usage: ./deploy_infra.sh [plan|apply|destroy] [aws|oci|azure]
-# Should work and be compatible with all Linux computers including WSL.
-# Supports all Kubernetes tools: Minikube, Kind, K3s, K8s, EKS, GKE, AKS, MicroK8s or others.
-# CONFIGURATION POLICY:
+
+# Designed to be compatible with major Linux distributions and WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, EKS, GKE, AKS, MicroK8s or others.
 # .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
 # run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
 # This script MUST NOT independently determine the deployment environment.
@@ -19,10 +19,11 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
 fi
 
 # Resolve PROJECT_ROOT correctly
-if [[ -z "${PROJECT_ROOT:-}" ]]; then
-    PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+
 readonly PROJECT_ROOT
+export PROJECT_ROOT
 
 source "${PROJECT_ROOT}/platform/lib/colors.sh"
 source "${PROJECT_ROOT}/platform/lib/logging.sh"
@@ -43,33 +44,6 @@ fi
 export AWS_PROFILE="${AWS_PROFILE:-default}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export AWS_DEFAULT_REGION="$AWS_REGION"
-
-print_subsection "AWS Troubleshooting Commands"
-
-cat <<'EOF'
-
-Run manually if AWS authentication fails:
-
-date -u
-timedatectl status
-systemctl status chrony
-chronyc sources -v
-chronyc tracking
-chronyc activity
-sudo chronyc makestep
-aws sts get-caller-identity
-aws ec2 describe-availability-zones --region us-east-1
-
-EOF
-
-print_subsection "AWS Authentication"
-
-print_info "AWS profile: ${AWS_PROFILE}"
-print_info "AWS region:  ${AWS_REGION}"
-
-aws sts get-caller-identity >/dev/null
-
-print_success "AWS credentials are valid"
 
 # Terraform variables
 export TF_VAR_db_username="$DB_USERNAME"
@@ -127,6 +101,28 @@ esac
 
 # AWS / Terraform
 deploy_terraform() {
+    print_subsection "AWS Troubleshooting Commands"
+    cat <<'EOF'
+Run manually if AWS authentication fails:
+date -u
+timedatectl status
+systemctl status chrony
+chronyc sources -v
+chronyc tracking
+chronyc activity
+sudo chronyc makestep
+aws sts get-caller-identity
+aws ec2 describe-availability-zones --region us-east-1
+EOF
+    print_subsection "AWS Authentication"
+
+    print_info "AWS profile: ${AWS_PROFILE}"
+    print_info "AWS region:  ${AWS_REGION}"
+
+    aws sts get-caller-identity >/dev/null
+
+    print_success "AWS credentials are valid"
+
     print_subsection "AWS Infrastructure — Terraform"
     local tf_dir="${PROJECT_ROOT}/platform/infra/terraform"
     require_command terraform \
@@ -209,10 +205,24 @@ deploy_pulumi() {
 
     cd "$pulumi_dir"
 
-    local stack="${DEPLOY_TARGET}"
+    if [[ ! -f Pulumi.yaml ]]; then
+        print_error "Pulumi.yaml missing"
+        exit 1
+    fi
 
-    pulumi stack select "$stack" \
-        || pulumi stack init "$stack"
+    local stack="${PULUMI_STACK:-HiteshMondal/devops-platform-azure/prod}"
+
+    print_info "Pulumi project:"
+    grep "^name:" Pulumi.yaml
+
+    print_info "Pulumi stack: $stack"
+
+    if pulumi stack select "$stack"; then
+        print_success "Pulumi stack selected: $stack"
+    else
+        print_warning "Creating Pulumi stack: $stack"
+        pulumi stack init "$stack"
+    fi
 
     case "$ACTION" in
         plan)
@@ -220,11 +230,9 @@ deploy_pulumi() {
             ;;
         apply)
             pulumi up --yes
-            print_success "Pulumi apply complete"
             ;;
         destroy)
             pulumi destroy --yes
-            print_success "Pulumi destroy complete"
             ;;
     esac
 }

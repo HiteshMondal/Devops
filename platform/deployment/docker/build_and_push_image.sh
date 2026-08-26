@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# /app/build_and_push_image.sh
+# /platform/deployment/docker/build_and_push_image.sh
+
+# Designed to be compatible with major Linux distributions and WSL.
+# Supports all Kubernetes tools: Minikube, Kind, K3s, EKS, GKE, AKS, MicroK8s or others.
+# .env is the SINGLE SOURCE OF TRUTH for Ports, Variables, and Secrets.
+# run.sh is the SINGLE AUTHORITY for Local/Production mode and execution flow.
+# This script MUST NOT independently determine the deployment environment.
 
 set -euo pipefail
 
@@ -63,3 +69,5 @@ build_and_push_image() {
 
     echo "✅ Image pushed successfully: ${IMAGE_NAME}"
 }
+
+build_and_push_image "$@"
