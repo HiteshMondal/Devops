@@ -17,13 +17,18 @@ tfplan
 terraform.rc
 .tofurc
 
+# Allow example variable files
+!*.tfvars.example
+
 # PULUMI
 .pulumi/
 Pulumi.*.yaml.bak
 
-# KUBERNETES
-*.tmp
-*.bak
+
+# KUBERNETES / HELM
+
+# Add tool-specific generated files here if applicable
+
 
 # ENVIRONMENT VARIABLES
 .env
@@ -73,11 +78,9 @@ logs/
 log/
 *.log
 
-# SECRETS & CREDENTIALS
-*.pem
+# SECRETS / CREDENTIALS
+
 *.key
-*.crt
-*.ppk
 *.secret
 secrets/
 credentials/
@@ -85,7 +88,12 @@ credentials.json
 service-account.json
 id_rsa*
 
-# BUILD & ARCHIVES
+# Optional: if your project treats all PEM files as sensitive
+*.pem
+
+
+# BUILD / ARCHIVES
+
 *.zip
 *.tar
 *.tar.gz
@@ -95,24 +103,26 @@ id_rsa*
 # NOTEBOOKS
 **/.ipynb_checkpoints/
 
-# MONITORING DATA (runtime-generated artifacts — never commit)
+
+# MONITORING DATA
+# Runtime-generated artifacts — never commit
+
 monitoring/**/reports/
 monitoring/**/profiles/
 monitoring/**/data/
 monitoring/**/storage/
 
-# Prometheus / Grafana persistent volumes
 prometheus-data/
 grafana-data/
 
-# Evidently HTML/JSON reports fallback rule
-**/evidently/**/reports/
-
-# TEMPORARY FILES
+# TEMPORARY / BACKUP FILES
 tmp/
 temp/
+*.tmp
+*.bak
 
-# COMMON MODEL FILE TYPES
+
+# MODEL ARTIFACTS
 *.pt
 *.pth
 *.h5
@@ -122,12 +132,12 @@ temp/
 *.joblib
 *.onnx
 *.pb
-*.bin
 *.safetensors
 
 # DATA
-data
-app-data
+data/
+app-data/
 
-# Argo
+
+# ARGO CD / GENERATED
 platform/cicd/argo/generated/
