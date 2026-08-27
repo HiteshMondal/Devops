@@ -50,7 +50,6 @@ __pycache__/
 .Python
 venv/
 .venv/
-.venv-mlops/
 env/
 ENV/
 pip-log.txt
@@ -112,9 +111,6 @@ grafana-data/
 # TEMPORARY FILES
 tmp/
 temp/
-
-# Allow lightweight metrics tracking
-!ml/models/artifacts/eval_metrics.json
 
 # COMMON MODEL FILE TYPES
 *.pt
