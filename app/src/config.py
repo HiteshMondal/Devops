@@ -1,27 +1,42 @@
-"""Centralized application settings, sourced entirely from environment
-variables so the same image runs unmodified in any environment (local,
-Docker Compose, Minikube, Kind, k3s, EKS, GKE, AKS, ...).
+"""Environment-driven configuration.
+
+Reads the exact variable names defined in `.env` and injected at runtime by
+`platform/deployment/kubernetes/deploy_kubernetes.sh` (ConfigMap `devops-app-config`
+and Secret `devops-app-secrets`). These names are a shared contract with the
+rest of the platform — do not rename them here.
 """
-from __future__ import annotations
-
 import os
-from dataclasses import dataclass
 
 
-def _env_int(name: str, default: int) -> int:
+def _str(name: str, default: str = "") -> str:
+    return os.environ.get(name, default)
+
+
+def _int(name: str, default: int) -> int:
     try:
         return int(os.environ.get(name, default))
     except ValueError:
         return default
 
 
-@dataclass(frozen=True)
-class Settings:
-    app_name: str = os.environ.get("APP_NAME", "devops-app")
-    app_env: str = os.environ.get("APP_ENV", "production")
-    log_level: str = os.environ.get("LOG_LEVEL", "info")
-    app_port: int = _env_int("APP_PORT", 8000)
-    db_path: str = os.environ.get("DB_PATH", "/data/app.db")
+class Config:
+    # Application
+    APP_NAME = _str("APP_NAME", "devops-app")
+    APP_ENV = _str("APP_ENV", "local")          # "local" | "production" — set by run.sh
+    APP_PORT = _int("APP_PORT", 8000)
+    LOG_LEVEL = _str("LOG_LEVEL", "info")
+
+    # Database (optional — used only for the /config introspection endpoint)
+    DB_HOST = _str("DB_HOST", "localhost")
+    DB_PORT = _int("DB_PORT", 5432)
+    DB_NAME = _str("DB_NAME", "devopsdb")
+    DB_USERNAME = _str("DB_USERNAME", "devops")
+    DB_PASSWORD = _str("DB_PASSWORD", "")
+
+    # Secrets — never exposed via the API, only read for internal use
+    JWT_SECRET = _str("JWT_SECRET", "")
+    API_KEY = _str("API_KEY", "")
+    SESSION_SECRET = _str("SESSION_SECRET", "")
 
 
-settings = Settings()
+config = Config()

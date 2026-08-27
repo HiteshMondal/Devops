@@ -1,30 +1,20 @@
-# syntax=docker/dockerfile:1
-
-FROM python:3.12-slim AS base
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    DB_PATH=/data/app.db \
-    APP_ENV=production
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps kept minimal; add build-essential only if a dependency ever needs compiling.
+# Install dependencies first for better layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Application source
 COPY src ./src
 
-RUN mkdir -p /data \
-    && useradd --create-home --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app /data
-
-USER appuser
-
+# APP_PORT is the single source of truth (see .env). Default kept in sync
+# with .env's APP_PORT=8000 so a plain `docker run` still works.
+ENV APP_PORT=8000
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')" || exit 1
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form so ${APP_PORT} is resolved from the container's real
+# environment at runtime (injected via the Kubernetes ConfigMap/Secret,
+# docker-compose, or `docker run -e APP_PORT=...`).
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${APP_PORT:-8000} --log-level ${LOG_LEVEL:-info}"]
