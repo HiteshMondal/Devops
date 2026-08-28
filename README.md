@@ -1,5 +1,6 @@
-# Multi-Cloud Application & Infrastructure Platform
-```
+<div align="center">
+
+```text
             ██████╗ ███████╗██╗   ██╗ ██████╗ ██████╗ ███████╗
             ██╔══██╗██╔════╝██║   ██║██╔═══██╗██╔══██╗██╔════╝
             ██║  ██║█████╗  ██║   ██║██║   ██║██████╔╝███████╗
@@ -8,15 +9,75 @@
             ╚═════╝ ╚══════╝  ╚═══╝   ╚═════╝ ╚═╝     ╚══════╝
 ```
 
-A **Production-grade Multi-Cloud Application & Infrastructure Platform project** demonstrating the full lifecycle of an application Deployment:
+# ☁️ Multi-Cloud Application & Infrastructure Platform
 
-A multi-cloud application and infrastructure platform. One script deploys everything: containerized app, Kubernetes manifests, observability stack, and cloud infrastructure — locally or in production.
+### 🚀 Production-Grade DevOps · Kubernetes · GitOps · Observability · Cloud
 
-This repository provides a single-command interactive deployment runner:
+<p>
+  <img src="https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
+  <img src="https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white" alt="ArgoCD"/>
+  <img src="https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white" alt="Prometheus"/>
+  <img src="https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana"/>
+  <img src="https://img.shields.io/badge/Loki-F2CC0C?style=for-the-badge&logo=grafana&logoColor=black" alt="Loki"/>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/AWS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS"/>
+  <img src="https://img.shields.io/badge/Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white" alt="Azure"/>
+  <img src="https://img.shields.io/badge/Oracle%20Cloud-F80000?style=for-the-badge&logo=oracle&logoColor=white" alt="Oracle Cloud"/>
+  <img src="https://img.shields.io/badge/Terraform-844FBA?style=for-the-badge&logo=terraform&logoColor=white" alt="Terraform"/>
+  <img src="https://img.shields.io/badge/OpenTofu-FFDA18?style=for-the-badge&logo=opentofu&logoColor=black" alt="OpenTofu"/>
+  <img src="https://img.shields.io/badge/Pulumi-8A3391?style=for-the-badge&logo=pulumi&logoColor=white" alt="Pulumi"/>
+  <img src="https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge&logo=aqua&logoColor=white" alt="Trivy"/>
+</p>
+
+</div>
+
+<br>
+
+> **One command. Any environment. Any cloud.**
+> Deploy the application, infrastructure, Kubernetes workloads,
+> observability stack, logging, and security tooling through a unified workflow.
+
+<br>
 
 ```bash
 ./run.sh
 ```
+
+### ⚡ Quick Start
+
+```bash
+git clone https://github.com/HiteshMondal/devops.git
+cd devops
+
+cp .env.example .env
+nano .env          # fill in required values
+
+chmod +x run.sh
+./run.sh
+```
+`.env` is the single source of truth for ports, variables, and secrets. `run.sh` is the single authority for local/production mode — no other script decides the environment on its own.
+
+<br>
+
+### 🧩 Platform Capabilities
+
+| Layer                  | Technology                          |
+| :--------------------- | :---------------------------------- |
+| 🚀 **Application**     | FastAPI · Python · Uvicorn          |
+| 📦 **Containers**      | Docker · Podman                     |
+| ☸️ **Orchestration**   | Kubernetes · Kustomize              |
+| 🔄 **CI/CD & GitOps**  | GitHub Actions · GitLab CI · ArgoCD |
+| 🏗️ **Infrastructure**  | Terraform · OpenTofu · Pulumi       |
+| 📊 **Observability**   | Prometheus · Grafana · Loki         |
+| 🛡️ **Security**        | Trivy                               |
+| ☁️ **Cloud**           | AWS · Azure · Oracle Cloud          |
+
+<br>
+
+**🎯 Develop → 📦 Containerize → ☸️ Deploy → 🔄 GitOps → 📊 Observe → 🛡️ Secure**
 
 ---
 
@@ -96,55 +157,76 @@ This repository provides a single-command interactive deployment runner:
 
 ---
 
-## What's Inside
-
-| Layer | Tooling |
-|---|---|
-| Application | FastAPI (Python), Uvicorn |
-| Containers | Docker or Podman (auto-detected) |
-| Kubernetes | Kustomize (base + local/prod overlays) |
-| CI/CD | GitHub Actions, GitLab CI, ArgoCD |
-| Infrastructure | Terraform (AWS), OpenTofu (OCI), Pulumi (Azure) |
-| Monitoring | Prometheus, Grafana |
-| Logging | Loki, Promtail |
-| Security | Trivy image scanning |
-
-Cluster distributions are auto-detected: Minikube, Kind, K3s, MicroK8s, EKS, GKE, AKS.
-
----
-
 ## Prerequisites
 
-- Docker or Podman
-- `kubectl`
-- `helm`
-- Terraform / OpenTofu / Pulumi (for the cloud you're targeting)
-- AWS CLI / Azure CLI / OCI CLI (for the cloud you're targeting)
-- A running Kubernetes cluster (for local mode)
+Before deploying the platform, ensure the required tools and credentials are available for your target environment.
 
-Run Docker without `sudo`:
+### 🧰 Required for All Deployments
+
+* **Linux** — supported host operating system
+* **Bash** — required to run the deployment scripts
+* **Git** — required to clone and manage the repository
+* **kubectl** — Kubernetes command-line interface
+* **Docker or Podman** — container runtime
+
+### 🖥️ Local Kubernetes
+
+Choose one supported local Kubernetes distribution:
+
+* **Minikube**
+* **Kind**
+* **K3s**
+* **MicroK8s**
+
+A running Kubernetes cluster is required before starting a local deployment.
+
+### ☁️ AWS
+
+For AWS deployments:
+
+* **AWS CLI**
+* **Terraform**
+* Configured **AWS credentials**
+* Appropriate AWS permissions to provision **EKS and RDS**
+
+### ☁️ Azure
+
+For Azure deployments:
+
+* **Azure CLI**
+* **Pulumi**
+* Configured **Azure authentication**
+* Appropriate Azure permissions to provision **AKS and PostgreSQL**
+
+### ☁️ Oracle Cloud Infrastructure (OCI)
+
+For OCI deployments:
+
+* **OCI CLI**
+* **OpenTofu**
+* Configured **OCI credentials**
+* Appropriate OCI permissions to provision **OKE and Autonomous Database**
+
+### 🔄 Production / GitOps
+
+Production deployments additionally require:
+
+* Access to the configured **Git repository**
+* Access to the configured **container registry**
+* Valid **registry credentials**
+* Cloud provider authentication for the selected infrastructure
+
+> **Note:** Cloud deployments require provider-specific credentials and permissions. Review the generated infrastructure plan before applying changes.
+
+
+### 🐳 Docker Permissions
+
+If using Docker, configure your user to run Docker without `sudo`:
 
 ```bash
 sudo usermod -aG docker $USER
 newgrp docker
 ```
-
----
-
-## Quick Start
-
-```bash
-git clone https://github.com/HiteshMondal/devops.git
-cd devops
-
-cp .env.example .env
-nano .env          # fill in required values
-
-chmod +x run.sh
-./run.sh
-```
-
-`.env` is the single source of truth for ports, variables, and secrets. `run.sh` is the single authority for local/production mode — no other script decides the environment on its own.
 
 ---
 
@@ -233,10 +315,9 @@ Provisions infra, then hands off to ArgoCD. Argo manages the app, monitoring, lo
 ```
 ---
 
-## Core Stack
+## Documentation
 
 * **Shell Scripts**: Automated shell scripts to run — [`scripts/linux_documentation.md`](./scripts/linux_documentation.md) 
-* **Application**: FastAPI (Python) — [`app/app_documentation.md`](./app/app_documentation.md)
 * **Containerization**: Docker / Podman — [`platform/deployment/docker/docker_documentation.md`](./platform/deployment/docker/docker_documentation.md)
 * **Orchestration**: Kubernetes — [`platform/deployment/kubernetes/documentation.md`](./platform/deployment/kubernetes/documentation.md)
 * **CI/CD**: GitHub Actions · GitLab CI · ArgoCD - [`platform/cicd/CICD_Documentation.md`](./platform/cicd/CICD_Documentation.md)

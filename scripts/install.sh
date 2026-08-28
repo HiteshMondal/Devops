@@ -1,3 +1,4 @@
+```bash
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -9,312 +10,454 @@ echo " DevOps Workstation Bootstrap Installer"
 echo "========================================"
 echo ""
 
-##########################################################
 # Root / sudo detection
-##########################################################
 
 if [[ "$EUID" -eq 0 ]]; then
     SUDO=""
 else
-    SUDO="sudo"
+    if command -v sudo >/dev/null 2>&1; then
+        SUDO="sudo"
+    else
+        echo "ERROR: sudo is required when running as a non-root user."
+        exit 1
+    fi
 fi
 
-##########################################################
-# Detect OS
-##########################################################
+# Detect operating system
 
 if [[ -f /etc/os-release ]]; then
     . /etc/os-release
 else
-    echo "Cannot detect OS"
+    echo "ERROR: Cannot detect operating system."
     exit 1
 fi
 
-case "$ID" in
-ubuntu|debian)
-    OS="$ID"
-    ;;
-*)
-    echo "Unsupported distro: $ID"
-    exit 1
-    ;;
+OS_ID="${ID:-unknown}"
+OS_NAME="${PRETTY_NAME:-$OS_ID}"
+
+case "$OS_ID" in
+
+    # Debian / Ubuntu family
+    debian|ubuntu|linuxmint|pop)
+        OS_FAMILY="debian"
+        PACKAGE_MANAGER="apt"
+        ;;
+
+    # Fedora / RHEL family
+    fedora|rhel|centos|rocky|almalinux|ol)
+        OS_FAMILY="redhat"
+        PACKAGE_MANAGER="dnf"
+        ;;
+
+    # Arch family
+    arch|manjaro|endeavouros|garuda)
+        OS_FAMILY="arch"
+        PACKAGE_MANAGER="pacman"
+        ;;
+
+    *)
+        echo "ERROR: Unsupported Linux distribution."
+        echo ""
+        echo "Detected: $OS_NAME"
+        echo ""
+        echo "Supported families:"
+        echo "  - Debian / Ubuntu"
+        echo "  - Fedora / RHEL"
+        echo "  - Arch-based distributions"
+        exit 1
+        ;;
+
 esac
 
-CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
-
-echo "Detected OS: $OS ($CODENAME)"
+echo "Detected OS: $OS_NAME"
+echo "OS family:  $OS_FAMILY"
+echo "Package manager: $PACKAGE_MANAGER"
 echo ""
 
-##########################################################
-# Detect Architecture
-##########################################################
+# Install base system dependencies
 
-ARCH=$(uname -m)
+echo "========================================"
+echo " Installing Base Utilities"
+echo "========================================"
+echo ""
 
-case "$ARCH" in
-x86_64)
-    AWS_ARCH="x86_64"
-    KIND_ARCH="amd64"
-    ;;
-aarch64)
-    AWS_ARCH="aarch64"
-    KIND_ARCH="arm64"
-    ;;
-*)
-    echo "Unsupported architecture: $ARCH"
+install_base_dependencies() {
+
+    case "$PACKAGE_MANAGER" in
+
+        apt)
+
+            echo "Updating package index..."
+            $SUDO apt update
+
+            echo ""
+            echo "Installing base utilities..."
+
+            $SUDO apt install -y \
+                ca-certificates \
+                curl \
+                wget \
+                gnupg \
+                lsb-release \
+                git \
+                gettext \
+                jq \
+                tar \
+                coreutils \
+                unzip
+
+            ;;
+
+        dnf)
+
+            echo "Refreshing package metadata..."
+            $SUDO dnf makecache
+
+            echo ""
+            echo "Installing base utilities..."
+
+            $SUDO dnf install -y \
+                ca-certificates \
+                curl \
+                wget \
+                gnupg2 \
+                redhat-lsb-core \
+                git \
+                gettext \
+                jq \
+                tar \
+                coreutils \
+                unzip
+
+            ;;
+
+        pacman)
+
+            echo "Synchronizing package databases..."
+            $SUDO pacman -Sy --noconfirm
+
+            echo ""
+            echo "Installing base utilities..."
+
+            $SUDO pacman -S --needed --noconfirm \
+                ca-certificates \
+                curl \
+                wget \
+                gnupg \
+                git \
+                gettext \
+                jq \
+                tar \
+                coreutils \
+                unzip
+
+            ;;
+
+    esac
+
+    echo ""
+    echo "Base utilities installed successfully."
+    echo ""
+
+}
+
+install_base_dependencies
+
+
+# Check DevOps tools
+
+echo "========================================"
+echo " Checking DevOps Tools"
+echo "========================================"
+echo ""
+
+MISSING_TOOLS=()
+
+check_command() {
+
+    local tool="$1"
+    local command="$2"
+    local version_command="$3"
+
+    if command -v "$command" >/dev/null 2>&1; then
+
+        printf "✓ %-12s " "$tool"
+
+        if [[ -n "$version_command" ]]; then
+            eval "$version_command" 2>/dev/null | head -n 1 || echo "installed"
+        else
+            echo "installed"
+        fi
+
+    else
+
+        echo "✗ $tool: NOT installed"
+        MISSING_TOOLS+=("$tool")
+
+    fi
+
+}
+
+
+# Docker
+
+check_command \
+    "Docker" \
+    "docker" \
+    "docker --version"
+
+
+# Kubernetes CLI
+
+check_command \
+    "kubectl" \
+    "kubectl" \
+    "kubectl version --client 2>/dev/null"
+
+
+# Minikube
+
+check_command \
+    "Minikube" \
+    "minikube" \
+    "minikube version"
+
+
+# Kind
+
+check_command \
+    "Kind" \
+    "kind" \
+    "kind version"
+
+
+# Terraform
+
+check_command \
+    "Terraform" \
+    "terraform" \
+    "terraform version"
+
+# AWS CLI
+
+check_command \
+    "AWS CLI" \
+    "aws" \
+    "aws --version"
+
+echo ""
+
+
+# Missing tool summary
+
+if [[ ${#MISSING_TOOLS[@]} -gt 0 ]]; then
+
+    echo "========================================"
+    echo " Missing DevOps Tools"
+    echo "========================================"
+    echo ""
+
+    for tool in "${MISSING_TOOLS[@]}"; do
+        echo "  ✗ $tool"
+    done
+
+    echo ""
+    echo "The missing tools are not installed automatically."
+    echo "Please install them using their latest official"
+    echo "installation instructions."
+    echo ""
+
+    echo "Official installation guides:"
+    echo ""
+    echo "  Docker:"
+    echo "    https://docs.docker.com/engine/install/"
+    echo ""
+    echo "  kubectl:"
+    echo "    https://kubernetes.io/docs/tasks/tools/"
+    echo ""
+    echo "  Minikube:"
+    echo "    https://minikube.sigs.k8s.io/docs/start/"
+    echo ""
+    echo "  Kind:"
+    echo "    https://kind.sigs.k8s.io/docs/user/quick-start/"
+    echo ""
+    echo "  Terraform:"
+    echo "    https://developer.hashicorp.com/terraform/install"
+    echo ""
+    echo "  AWS CLI:"
+    echo "    https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+    echo ""
+
     exit 1
-    ;;
-esac
-
-##########################################################
-# Update system once
-##########################################################
-
-echo "Updating package index..."
-$SUDO apt update
-
-##########################################################
-# Install base dependencies
-##########################################################
-
-echo "Installing base utilities..."
-
-$SUDO apt install -y \
-ca-certificates \
-curl \
-wget \
-gnupg \
-lsb-release \
-git \
-gettext \
-jq \
-tar \
-coreutils \
-unzip
-
-echo "Base utilities installed"
-echo ""
-
-##########################################################
-# Install Docker
-##########################################################
-
-echo "Installing Docker..."
-
-if [[ ! -f /etc/apt/keyrings/docker.asc ]]; then
-
-$SUDO install -m 0755 -d /etc/apt/keyrings
-
-$SUDO curl -fsSL \
-https://download.docker.com/linux/$OS/gpg \
--o /etc/apt/keyrings/docker.asc
-
-$SUDO chmod a+r /etc/apt/keyrings/docker.asc
-
-echo \
-"deb [arch=$(dpkg --print-architecture) \
-signed-by=/etc/apt/keyrings/docker.asc] \
-https://download.docker.com/linux/$OS \
-$CODENAME stable" \
-| $SUDO tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-$SUDO apt update
 
 fi
 
-$SUDO apt install -y \
-docker-ce \
-docker-ce-cli \
-containerd.io \
-docker-buildx-plugin \
-docker-compose-plugin
-
-$SUDO systemctl enable docker
-$SUDO systemctl start docker
-
-$SUDO usermod -aG docker "$USER" || true
-
-echo "Docker installed"
-echo "Log out/in required for docker group usage"
+echo "✓ All required DevOps tools are installed."
 echo ""
 
-##########################################################
-# Install kubectl
-##########################################################
 
-echo "Installing kubectl..."
+# Docker permissions
 
-KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-
-curl -LO \
-"https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/$KIND_ARCH/kubectl"
-
-chmod +x kubectl
-
-$SUDO mv kubectl /usr/local/bin/
-
-echo "kubectl installed"
+echo "========================================"
+echo " Checking Docker Access"
+echo "========================================"
 echo ""
 
-##########################################################
-# Install Minikube
-##########################################################
+if command -v docker >/dev/null 2>&1; then
 
-echo "Installing Minikube..."
+    if docker info >/dev/null 2>&1; then
 
-curl -LO \
-https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$KIND_ARCH
+        echo "✓ Docker daemon is accessible."
 
-chmod +x minikube-linux-$KIND_ARCH
+    elif [[ "$EUID" -ne 0 ]]; then
 
-$SUDO mv minikube-linux-$KIND_ARCH /usr/local/bin/minikube
+        echo "Docker is installed, but the current user"
+        echo "cannot access the Docker daemon without sudo."
+        echo ""
 
-echo "Minikube installed"
-echo ""
+        if getent group docker >/dev/null 2>&1; then
 
-##########################################################
-# Install Kind
-##########################################################
+            echo "Adding '$USER' to the docker group..."
 
-echo "Installing Kind..."
+            $SUDO usermod -aG docker "$USER" || true
 
-curl -Lo kind \
-https://kind.sigs.k8s.io/dl/latest/kind-linux-$KIND_ARCH
+            echo ""
+            echo "✓ Docker group membership updated."
+            echo "  Log out and log back in for the change to take effect."
 
-chmod +x kind
+        else
 
-$SUDO mv kind /usr/local/bin/
+            echo "WARNING: Docker group does not exist."
+            echo "Configure Docker according to the official"
+            echo "installation instructions for your distribution."
 
-echo "Kind installed"
-echo ""
+        fi
 
-##########################################################
-# Install Terraform
-##########################################################
+    else
 
-echo "Installing Terraform..."
+        echo "Docker is installed, but the daemon is not accessible."
 
-if [[ ! -f /usr/share/keyrings/hashicorp-archive-keyring.gpg ]]; then
+    fi
 
-wget -O- https://apt.releases.hashicorp.com/gpg \
-| gpg --dearmor \
-| $SUDO tee \
-/usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+else
 
-echo \
-"deb [arch=$(dpkg --print-architecture) \
-signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
-https://apt.releases.hashicorp.com \
-$CODENAME main" \
-| $SUDO tee \
-/etc/apt/sources.list.d/hashicorp.list > /dev/null
-
-$SUDO apt update
+    echo "Docker is not installed."
 
 fi
 
-$SUDO apt install -y terraform
-
-echo "Terraform installed"
 echo ""
 
 ##########################################################
-# Install AWS CLI
+# Optional GUI installation
 ##########################################################
 
-echo "Installing AWS CLI..."
-
-curl \
-"https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" \
--o awscliv2.zip
-
-unzip -q awscliv2.zip
-
-$SUDO ./aws/install --update
-
-rm -rf aws awscliv2.zip
-
-echo "AWS CLI installed"
+echo "========================================"
+echo " Optional Desktop Environment"
+echo "========================================"
 echo ""
 
-##########################################################
-# Optional GUI install (LXDE)
-##########################################################
-
+echo "Install lightweight LXDE desktop environment?"
 echo ""
-echo "Optional: Install lightweight desktop (LXDE)"
-echo "1) Install LXDE"
-echo "2) Skip"
+echo "  1) Install LXDE"
+echo "  2) Skip"
 echo ""
 
 read -rp "Enter choice [1-2]: " GUI_CHOICE
 
 case "$GUI_CHOICE" in
 
-1)
+    1)
 
-echo "Installing LXDE..."
+        echo ""
+        echo "Installing LXDE..."
 
-$SUDO apt install -y \
-lxde-core \
-lxterminal \
-lightdm
+        case "$PACKAGE_MANAGER" in
 
-echo lightdm | $SUDO tee \
-/etc/X11/default-display-manager > /dev/null
+            apt)
 
-$SUDO systemctl enable lightdm
-$SUDO systemctl start lightdm
+                $SUDO apt install -y \
+                    lxde-core \
+                    lxterminal \
+                    lightdm
 
-echo ""
-echo "LXDE installed successfully"
-echo ""
+                if [[ -d /etc/X11 ]]; then
+                    echo lightdm | $SUDO tee \
+                        /etc/X11/default-display-manager > /dev/null
+                fi
 
-read -rp "Reboot now? [Y/n]: " reboot_choice
-reboot_choice=${reboot_choice:-Y}
+                $SUDO systemctl enable lightdm
+                $SUDO systemctl start lightdm
 
-if [[ "$reboot_choice" =~ ^[Yy]$ ]]; then
-$SUDO reboot
-fi
+                ;;
 
-;;
+            dnf)
 
-*)
+                $SUDO dnf install -y \
+                    lxde-common \
+                    lxterminal \
+                    lightdm
 
-echo "Skipping GUI installation"
+                $SUDO systemctl enable lightdm
+                $SUDO systemctl start lightdm
 
-;;
+                ;;
+
+            pacman)
+
+                $SUDO pacman -S --needed --noconfirm \
+                    lxde \
+                    lxterminal \
+                    lightdm
+
+                $SUDO systemctl enable lightdm
+                $SUDO systemctl start lightdm
+
+                ;;
+
+        esac
+
+        echo ""
+        echo "✓ LXDE installed successfully."
+        echo ""
+
+        read -rp "Reboot now? [Y/n]: " REBOOT_CHOICE
+        REBOOT_CHOICE=${REBOOT_CHOICE:-Y}
+
+        if [[ "$REBOOT_CHOICE" =~ ^[Yy]$ ]]; then
+
+            echo ""
+            echo "Rebooting..."
+            $SUDO reboot
+
+        fi
+
+        ;;
+
+    2|"")
+        echo ""
+        echo "Skipping GUI installation."
+        ;;
+
+    *)
+        echo ""
+        echo "Invalid choice. Skipping GUI installation."
+        ;;
 
 esac
 
-##########################################################
-# PYTHON DEPENDENCIES
-##########################################################
-
-echo "Installing Python dependencies..."
-pip install --upgrade pip
-pip install -r app/requirements.txt
-
-echo "Installing DVC..."
-pip install dvc
-
-echo "Installing Metaflow..."
-pip install metaflow
-
-echo "Installing Prefect..."
-pip install prefect
-
-echo "All MLOps dependencies installed."
-
-##########################################################
-# Final message
-##########################################################
-
 echo ""
 echo "========================================"
-echo " Installation Complete"
+echo " Bootstrap Check Complete"
 echo "========================================"
 echo ""
-echo "Recommended next step:"
-echo "Log out and log back in to enable Docker"
+
+echo "✓ Workstation bootstrap completed."
 echo ""
+
+echo "Next steps:"
+echo "  1. Configure your project .env file."
+echo "  2. Verify Docker access after logging in again."
+echo "  3. Ensure a supported Kubernetes cluster is available."
+echo "  4. Run ./run.sh to start the deployment workflow."
+echo ""
+```
