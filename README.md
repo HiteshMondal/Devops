@@ -370,21 +370,6 @@ Runs a selective, destructive cleanup of containers, cluster resources, and loca
 
 ---
 
-## Documentation
-
-Each component has its own doc alongside its code:
-
-- `scripts/linux_documentation.md`
-- `platform/deployment/docker/docker_documentation.md`
-- `platform/deployment/kubernetes/documentation.md`
-- `platform/cicd/CICD_Documentation.md`
-- `platform/cicd/github/Git_GitHub_Fundamentals.md`
-- `platform/infra/documentation.md`
-- `platform/infra/terraform/AWS_Documentation.md`
-- `monitoring/documentation.md`
-
----
-
 ## Author
 
 **Hitesh Mondal** — DevOps · Cloud · Cybersecurity
