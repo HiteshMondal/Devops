@@ -9,6 +9,15 @@ export TRIVY_NO_PROGRESS=true
 echo "Starting Trivy vulnerability scan..."
 mkdir -p /reports
 
+# Seed the persistent cache from the image-baked DB on first use, so we
+# never pay the full ~3-4min download cost after a fresh/recreated PVC.
+CACHE_DIR="${TRIVY_CACHE_DIR:-/tmp/trivy-cache}"
+if [[ -d /opt/trivy-db-seed ]] && [[ ! -f "${CACHE_DIR}/db/trivy.db" ]]; then
+    echo "Seeding Trivy DB cache from image build..."
+    mkdir -p "${CACHE_DIR}"
+    cp -r /opt/trivy-db-seed/. "${CACHE_DIR}/" 2>/dev/null || true
+fi
+
 if ! kubectl auth can-i list pods --all-namespaces >/dev/null 2>&1; then
     echo "ERROR: kubectl cannot list pods — check ServiceAccount token and RBAC permissions"
     echo "       Verify that the trivy-operator ClusterRoleBinding is present and the"

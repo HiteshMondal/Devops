@@ -281,12 +281,11 @@ clean_loki() {
 
 clean_trivy() {
     print_section "Trivy"
-    print_step "Deleting trivy-system namespace..."
-    run_kubectl delete namespace trivy-system --ignore-not-found=true
+    print_step "Deleting trivy namespace (removes exporter, scan jobs, cronjob, PVCs)..."
     run_kubectl delete namespace trivy --ignore-not-found=true
-    run_kubectl delete deployment trivy -n devops-app
-    run_kubectl delete svc trivy -n devops-app
-    run_kubectl delete pvc trivy-reports-pvc -n trivy-system
+    print_step "Removing cluster-scoped Trivy RBAC (not namespace-bound)..."
+    run_kubectl delete clusterrolebinding trivy-operator --ignore-not-found=true
+    run_kubectl delete clusterrole trivy-operator --ignore-not-found=true
     print_ok "Trivy removed"
 }
 

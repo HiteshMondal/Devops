@@ -36,7 +36,7 @@ RUN kubectl version --client --output=yaml
 # Prefetch Trivy DB
 RUN trivy image \
         --download-db-only \
-        --cache-dir /tmp/trivy-cache \
+        --cache-dir /opt/trivy-db-seed \
     || true
 
 # Non-root user

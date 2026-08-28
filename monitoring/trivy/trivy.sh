@@ -186,6 +186,47 @@ reconcile_initial_scan_job() {
     print_success "Job ${job_name} deleted — will be recreated by apply"
 }
 
+# Poll the exporter until it reports scanned images, so we only tell the
+# user "ready" when the dashboard will actually show data.
+wait_for_trivy_metrics() {
+    local namespace="$1"
+    local max_wait=300
+    local elapsed=0
+    local interval=5
+
+    print_step "Waiting for scan results to reach the exporter..."
+
+    while [[ "$elapsed" -lt "$max_wait" ]]; do
+        local scanned
+        scanned=$(kubectl exec -n "${namespace}" deploy/trivy-exporter -- \
+            python3 -c "
+import urllib.request
+try:
+    body = urllib.request.urlopen('http://localhost:8082/metrics', timeout=3).read().decode()
+    for line in body.splitlines():
+        if line.startswith('trivy_images_scanned_total '):
+            print(line.split()[1])
+            break
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+
+        if [[ -n "$scanned" ]] && (( $(echo "$scanned > 0" | bc -l 2>/dev/null || echo 0) )); then
+            print_success "Metrics confirmed — ${scanned%.*} image(s) scanned, dashboard is live"
+            return 0
+        fi
+
+        printf "\r    ...still waiting (%ds/%ds)" "$elapsed" "$max_wait"
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    echo ""
+    print_warning "Timed out waiting for metrics after ${max_wait}s — dashboard may take longer"
+    print_info "Check manually: kubectl logs -n ${namespace} deploy/trivy-exporter"
+    return 1
+}
+
 # DEPLOY TRIVY TO CLUSTER
 deploy_trivy() {
     if [[ "${TRIVY_ENABLED}" != "true" ]]; then
@@ -200,7 +241,7 @@ deploy_trivy() {
 
     print_step "Reconciling PVCs (handling immutability)..."
     reconcile_pvc "trivy-cache-pvc"   "${TRIVY_NAMESPACE}" "ReadWriteOnce"
-    reconcile_pvc "trivy-reports-pvc" "${TRIVY_NAMESPACE}" "ReadWriteMany"
+    reconcile_pvc "trivy-reports-pvc" "${TRIVY_NAMESPACE}" "ReadWriteOnce"
 
     print_step "Reconciling initial scan Job (handling immutability)..."
     reconcile_initial_scan_job "${TRIVY_NAMESPACE}"
@@ -217,10 +258,17 @@ deploy_trivy() {
 
     print_step "Waiting for initial Trivy scan job to complete (non-blocking)..."
     if kubectl wait --for=condition=complete \
-        --timeout=120s \
+        --timeout=300s \
         -n "${TRIVY_NAMESPACE}" \
         job/trivy-initial-scan 2>/dev/null; then
         print_success "Initial Trivy scan complete"
+        if [[ "${TRIVY_METRICS_ENABLED}" == "true" ]]; then
+            print_step "Restarting exporter to pick up scan results immediately..."
+            kubectl rollout restart deployment/trivy-exporter -n "${TRIVY_NAMESPACE}" 2>/dev/null || true
+            kubectl rollout status deployment/trivy-exporter \
+                -n "${TRIVY_NAMESPACE}" --timeout=60s 2>/dev/null || true
+            wait_for_trivy_metrics "${TRIVY_NAMESPACE}"
+        fi
     else
         print_warning "Initial scan still running — check later with:"
         print_cmd "" "kubectl logs -n ${TRIVY_NAMESPACE} job/trivy-initial-scan -f"

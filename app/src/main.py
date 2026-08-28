@@ -38,9 +38,14 @@ _circuit_breaker = CircuitBreaker(failure_threshold=3, reset_timeout_seconds=15)
 # Health
 
 @app.get("/health")
+@app.get("/api/v1/health")
 def health():
     """Liveness probe — is the process up?"""
-    return {"status": "ok", "app": config.APP_NAME, "env": config.APP_ENV}
+    return {
+        "status": "ok",
+        "app": config.APP_NAME,
+        "env": config.APP_ENV,
+    }
 
 
 @app.get("/ready")
