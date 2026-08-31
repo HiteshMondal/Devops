@@ -282,7 +282,7 @@ deploy_trivy() {
             || print_warning "Trivy exporter still starting — check with: kubectl get pods -n ${TRIVY_NAMESPACE}"
     fi
     echo "Trivy Scanning for Vulnerabilities..."
-    sleep 300
+    sleep 100
 }
 
 # MAIN

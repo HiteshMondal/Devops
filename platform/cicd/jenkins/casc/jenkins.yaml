@@ -88,10 +88,11 @@ credentials:
               secret: "${ARGOCD_ADMIN_PASSWORD:-}"
               description: "ArgoCD admin password (from .env / jenkins.env)"
 
-          - fileFromBase64:
+          - file:
               scope: GLOBAL
               id: "kubeconfig"
-              base64: "${KUBECONFIG_CONTENTS_BASE64:-}"
+              fileName: "kubeconfig"
+              secretBytes: "${KUBECONFIG_CONTENTS_BASE64:-}"
               description: "kubeconfig for the target cluster, base64-encoded (from jenkins.env — see scripts/configure_jenkins.sh)"
 
 # Job seeding

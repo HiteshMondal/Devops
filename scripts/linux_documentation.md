@@ -1818,13 +1818,14 @@ hitesh    1234  1200  0 09:05 pts/0    00:00:00 bash
 
 **Process STAT codes:**
 
-| Code | Meaning |
-|------|---------|
-| `R` | Running/runnable |
-| `S` | Sleeping |
-| `D` | Uninterruptible sleep (usually I/O) |
-| `Z` | Zombie — finished, not yet reaped |
-| `T` | Stopped |
+| Code | Meaning | Details |
+|------|---------|---------|
+| `R` | Running/runnable | The process is currently running on a CPU or is ready and waiting to be scheduled. |
+| `S` | Sleeping | The process is waiting for an event or resource, such as input, a timer, or another process. This is normal for many processes when they are idle. |
+| `D` | Uninterruptible sleep | The process is usually waiting for I/O, such as disk or device operations. It generally cannot be interrupted until the operation completes. |
+| `Z` | Zombie | The process has **finished execution**, but its parent process has not yet collected its exit status. The process is already dead, but a small entry remains in the process table until it is **reaped** by its parent. |
+| `T` | Stopped | The process has been suspended, usually by a signal such as `SIGSTOP` or `SIGTSTP`. It is not currently executing until it is continued. |
+
 
 > You can't kill a zombie directly — it's already dead. Fix it by killing/fixing its
 > **parent** so the parent reaps it. If the parent dies first, the zombie is

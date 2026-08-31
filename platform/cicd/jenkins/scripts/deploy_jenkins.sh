@@ -113,23 +113,7 @@ fi
 print_subsection "Building and starting Jenkins (controller + Docker-in-Docker)"
 "${COMPOSE[@]}" -f "$DOCKER_DIR/docker-compose.yml" up -d --build
 
-print_subsection "Waiting for Jenkins to become ready"
 JENKINS_PORT="${JENKINS_HTTP_PORT:-8090}"
-READY=false
-for _ in $(seq 1 60); do
-    if curl -fsS "http://localhost:${JENKINS_PORT}/login" >/dev/null 2>&1; then
-        READY=true
-        break
-    fi
-    sleep 5
-done
-
-if [[ "$READY" != true ]]; then
-    print_warning "Jenkins did not report ready within 5 minutes — check logs:"
-    print_info    "${COMPOSE[*]} -f ${DOCKER_DIR}/docker-compose.yml logs -f jenkins"
-else
-    print_success "Jenkins is up"
-fi
 
 print_divider
 print_success "Jenkins URL:      http://localhost:${JENKINS_PORT}/"
@@ -138,3 +122,27 @@ print_info    "Admin password:   set in ${DOCKER_DIR}/jenkins.env (not printed h
 print_info    "Logs:             ${COMPOSE[*]} -f ${DOCKER_DIR}/docker-compose.yml logs -f jenkins"
 print_info    "Stop:             ${SCRIPT_DIR}/reset_jenkins.sh"
 print_divider
+
+print_subsection "Waiting for Jenkins to become ready"
+READY=false
+for i in $(seq 1 60); do
+    if curl -fsS "http://localhost:${JENKINS_PORT}/login" >/dev/null 2>&1; then
+        READY=true
+        break
+    fi
+    if (( i % 6 == 0 )); then
+        print_info "Still waiting... ($(( i * 5 ))s elapsed)"
+    fi
+    sleep 5
+done
+
+if [[ "$READY" != true ]]; then
+    print_warning "Jenkins did not report ready within 5 minutes — checking container status"
+    "${COMPOSE[@]}" -f "$DOCKER_DIR/docker-compose.yml" ps jenkins
+    print_info "Tailing last 50 log lines:"
+    "${COMPOSE[@]}" -f "$DOCKER_DIR/docker-compose.yml" logs --tail=50 jenkins
+    print_info "If it's still initializing, this is often just slow first-boot JCasC/plugin loading — re-check with:"
+    print_info "${COMPOSE[*]} -f ${DOCKER_DIR}/docker-compose.yml logs -f jenkins"
+else
+    print_success "Jenkins is up"
+fi

@@ -16,6 +16,7 @@
 <p>
   <img src="https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
+  <img src="https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white" alt="Jenkins"/>
   <img src="https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white" alt="ArgoCD"/>
   <img src="https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white" alt="Prometheus"/>
   <img src="https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana"/>
@@ -64,16 +65,16 @@ chmod +x run.sh
 
 ### 🧩 Platform Capabilities
 
-| Layer                  | Technology                          |
-| :--------------------- | :---------------------------------- |
-| 🚀 **Application**     | FastAPI · Python · Uvicorn          |
-| 📦 **Containers**      | Docker · Podman                     |
-| ☸️ **Orchestration**   | Kubernetes · Kustomize              |
-| 🔄 **CI/CD & GitOps**  | GitHub Actions · GitLab CI · ArgoCD |
-| 🏗️ **Infrastructure**  | Terraform · OpenTofu · Pulumi       |
-| 📊 **Observability**   | Prometheus · Grafana · Loki         |
-| 🛡️ **Security**        | Trivy                               |
-| ☁️ **Cloud**           | AWS · Azure · Google Cloud (GCP)    |
+| Layer                  | Technology                                           |
+| :--------------------- | :--------------------------------------------------- |
+| 🚀 **Application**     | FastAPI · Python · Uvicorn                           |
+| 📦 **Containers**      | Docker · Podman                                      |
+| ☸️ **Orchestration**   | Kubernetes · Kustomize                               |
+| 🔄 **CI/CD & GitOps**  | GitHub Actions · GitLab CI · ArgoCD · Jenkins CI/CD  |
+| 🏗️ **Infrastructure**  | Terraform · OpenTofu · Pulumi                        |
+| 📊 **Observability**   | Prometheus · Grafana · Loki                          |
+| 🛡️ **Security**        | Trivy                                                |
+| ☁️ **Cloud**           | AWS · Azure · Google Cloud (GCP)                     |   
 
 <br>
 
@@ -89,11 +90,11 @@ chmod +x run.sh
                               │  Deployment Runner   │
                               └──────────┬───────────┘
                                          │
-                          ┌──────────────┴──────────────┐
-                          │      Bootstrap Menu         │
-                          │  install.sh · reset.sh ·    │
-                          │  deploy workflow            │
-                          └──────────────┬──────────────┘
+                        ┌────────────────┴──────────────────┐
+                        │         Bootstrap Menu            │
+                        │    install.sh   ·   reset.sh ·    │
+                        │ deploy workflow · Jenkins CI/CD   │
+                        └────────────────┬──────────────────┘
                                          │
                               select_environment()
                                          │
@@ -236,7 +237,7 @@ newgrp docker
 ```
 run.sh
  │
- ├─ 1. Bootstrap menu → install deps / reset environment / deploy
+ ├─ 1. Bootstrap menu → install deps / reset environment / deploy / Jenkins CICD
  ├─ 2. Choose environment → local | production
  ├─ 3. Auto-configure services for that environment
  ├─ 4. (Production only) choose cloud provider + infra action
@@ -302,7 +303,8 @@ Provisions infra, then hands off to ArgoCD. Argo manages the app, monitoring, lo
 │   ├── cicd/
 │   │   ├── argo/              # ArgoCD app definitions
 │   │   ├── github/
-│   │   └── gitlab/
+│   │   ├── gitlab/
+|   |   └── jenkins/           # Jenkins CI/CD
 │   └── infra/
 │       ├── terraform/         # AWS
 │       ├── Pulumi/            # Azure
