@@ -1,0 +1,57 @@
+// Jenkinsfile.infra — DevOps Platform Infrastructure Pipeline
+//
+// Thin wrapper around platform/infra/deploy_infra.sh (plan / apply / destroy
+// across AWS-Terraform, Azure-Pulumi, GCP-OpenTofu). Manual trigger only —
+// intentionally not wired to githubPush(), since infra changes should be
+// deliberate.
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(name: 'CLOUD_PROVIDER', choices: ['aws', 'azure', 'gcp'], description: 'Matches run.sh cloud provider selection')
+        choice(name: 'INFRA_ACTION', choices: ['plan', 'apply', 'destroy'], description: 'Matches run.sh infra action selection')
+    }
+
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+    }
+
+    stages {
+
+        stage('Checkout') { steps { checkout scm } }
+
+        stage('Confirm destroy') {
+            when { expression { params.INFRA_ACTION == 'destroy' } }
+            steps {
+                input message: "Confirm INFRA_ACTION=destroy for ${params.CLOUD_PROVIDER}? This is irreversible.", ok: 'Destroy'
+            }
+        }
+
+        stage('Provision Infrastructure') {
+            steps {
+                sh '''
+                    set -Eeuo pipefail
+                    SCRIPT="platform/infra/deploy_infra.sh"
+                    if [ ! -f "$SCRIPT" ]; then
+                        echo "FATAL: $SCRIPT not found — repo layout may have changed"
+                        exit 1
+                    fi
+                    chmod +x "$SCRIPT"
+                    "./$SCRIPT" "${INFRA_ACTION}" "${CLOUD_PROVIDER}"
+                '''
+            }
+        }
+    }
+
+    post {
+        always { cleanWs() }
+    }
+}

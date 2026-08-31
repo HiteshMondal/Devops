@@ -44,9 +44,7 @@ variable "app_port" {
   default     = 8000
 }
 
-# ------------------------------------------------------------------
 # GKE
-# ------------------------------------------------------------------
 
 variable "gke_cluster_name" {
   description = "GKE cluster name. Sourced from .env → GKE_CLUSTER_NAME."
@@ -85,9 +83,7 @@ variable "gke_release_channel" {
   default     = "REGULAR"
 }
 
-# ------------------------------------------------------------------
 # Cloud SQL — opt-in, NOT covered by GCP Always-Free
-# ------------------------------------------------------------------
 
 variable "enable_cloudsql" {
   description = "Provision Cloud SQL. Cloud SQL has no permanent free tier (unlike GKE/Compute Engine), so this defaults to false — applying this module never bills you for a database unless you explicitly turn it on."

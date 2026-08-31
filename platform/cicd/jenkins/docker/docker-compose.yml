@@ -1,0 +1,109 @@
+# Jenkins CI/CD — Docker Compose
+#
+# Jenkins runs entirely in Docker; nothing is installed on the host.
+# Pipeline builds talk to the `docker-dind` sidecar over TLS instead of the
+# host's Docker socket, so this works identically on any Linux host
+# regardless of docker group/socket permissions.
+#
+# Configuration is layered and entirely optional:
+#   1. jenkins.env            (this folder — Jenkins-specific values)
+#   2. project-root .env      (shared repo config, e.g. DOCKERHUB_USERNAME)
+# Both are declared `required: false` so this stack still starts even if
+# one of them is missing — it never breaks because of changes made
+# elsewhere in the repository.
+
+services:
+
+  docker-dind:
+    image: docker:27-dind
+    container_name: ${JENKINS_DIND_CONTAINER_NAME:-jenkins-docker-dind}
+    privileged: true
+    restart: unless-stopped
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - jenkins-docker-certs:/certs/client
+      - jenkins-dind-data:/var/lib/docker
+    networks:
+      - jenkins-net
+    expose:
+      - "2376"
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        JENKINS_VERSION: ${JENKINS_VERSION:-lts-jdk17}
+    image: ${JENKINS_IMAGE_NAME:-devops-jenkins}:${JENKINS_IMAGE_TAG:-latest}
+    container_name: ${JENKINS_CONTAINER_NAME:-jenkins-controller}
+    restart: unless-stopped
+    depends_on:
+      docker-dind:
+        condition: service_healthy
+    env_file:
+      - path: ./jenkins.env
+        required: false
+      - path: ../../../../.env
+        required: false
+    environment:
+      # Wire the pipeline docker CLI to the dind sidecar over TLS.
+      DOCKER_HOST: tcp://docker-dind:2376
+      DOCKER_CERT_PATH: /certs/client
+      DOCKER_TLS_VERIFY: "1"
+      CASC_JENKINS_CONFIG: /var/jenkins_home/casc/jenkins.yaml
+      # Everything Jenkins/JCasC needs is read from env vars — nothing is
+      # hardcoded in this file or in casc/jenkins.yaml. Values come from
+      # jenkins.env and/or the project-root .env loaded above; defaults
+      # keep the stack usable even when a value is left blank.
+      JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER:-admin}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?Set JENKINS_ADMIN_PASSWORD in docker/jenkins.env}
+      JENKINS_URL: ${JENKINS_URL:-http://localhost:8090/}
+      GITHUB_USERNAME: ${GITHUB_USERNAME:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      DOCKERHUB_USERNAME: ${DOCKERHUB_USERNAME:-}
+      DOCKERHUB_PASSWORD: ${DOCKERHUB_PASSWORD:-}
+      GIT_REPO_URL: ${GIT_REPO_URL:-}
+      GIT_REPO_BRANCH: ${GIT_REPO_BRANCH:-main}
+      KUBECONFIG_CONTENTS_BASE64: ${KUBECONFIG_CONTENTS_BASE64:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      ARGOCD_ADMIN_PASSWORD: ${ARGOCD_ADMIN_PASSWORD:-}
+      APP_NAME: ${APP_NAME:-devops-app}
+      NAMESPACE: ${NAMESPACE:-devops-app}
+      DOCKER_IMAGE_TAG: ${DOCKER_IMAGE_TAG:-latest}
+      TRIVY_VERSION: ${TRIVY_VERSION:-0.57.1}
+      TRIVY_SEVERITY: ${TRIVY_SEVERITY:-HIGH,CRITICAL}
+    ports:
+      - "${JENKINS_HTTP_PORT:-8090}:8080"
+      - "${JENKINS_AGENT_PORT:-50000}:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - jenkins-docker-certs:/certs/client:ro
+      - ../casc:/var/jenkins_home/casc:ro
+    networks:
+      - jenkins-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  jenkins-data:
+    name: ${JENKINS_VOLUME_NAME:-jenkins_data}
+  jenkins-docker-certs:
+    name: ${JENKINS_DOCKER_CERTS_VOLUME:-jenkins_docker_certs}
+  jenkins-dind-data:
+    name: ${JENKINS_DIND_VOLUME_NAME:-jenkins_dind_data}
+
+networks:
+  jenkins-net:
+    name: ${JENKINS_NETWORK_NAME:-jenkins-net}

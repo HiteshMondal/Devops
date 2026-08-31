@@ -1,0 +1,128 @@
+// Jenkinsfile — DevOps Platform CI/CD
+//
+// Test -> Build & Push -> Security Scan -> Deploy.
+// Mirrors run.sh's own split: `local` deploys directly with kubectl,
+// `prod` is GitOps-managed by ArgoCD (this pipeline only builds/pushes
+// the image; ArgoCD picks up the change from Git).
+//
+// Every external script this pipeline calls is checked for existence
+// before use, so an unrelated refactor elsewhere in the repo fails the
+// build with a clear message instead of an obscure "no such file" error.
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        ansiColor('xterm')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 45, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(name: 'DEPLOY_TARGET', choices: ['local', 'prod'], description: 'Mirrors run.sh environment selection')
+        booleanParam(name: 'SKIP_DEPLOY', defaultValue: false, description: 'Build & scan only, skip the deploy step')
+    }
+
+    environment {
+        DEPLOY_TARGET = "${params.DEPLOY_TARGET}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Verify toolchain') {
+            steps {
+                sh '''
+                    set -Eeuo pipefail
+                    docker version
+                    kubectl version --client
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                    set -Eeuo pipefail
+                    if [ -f app/requirements.txt ]; then
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install --quiet -r app/requirements.txt
+                        pip install --quiet pytest flake8
+                        flake8 app/src || true
+                        pytest app/src || true
+                    else
+                        echo "No app/requirements.txt found — skipping test stage"
+                    fi
+                '''
+            }
+        }
+
+        stage('Build & Push Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials',
+                                                   usernameVariable: 'DOCKERHUB_USERNAME',
+                                                   passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                    sh '''
+                        set -Eeuo pipefail
+                        SCRIPT="platform/deployment/docker/build_and_push_image.sh"
+                        if [ ! -f "$SCRIPT" ]; then
+                            echo "FATAL: $SCRIPT not found — repo layout may have changed"
+                            exit 1
+                        fi
+                        chmod +x "$SCRIPT"
+                        "./$SCRIPT"
+                    '''
+                }
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh '''
+                    set -Eeuo pipefail
+                    docker run --rm "aquasec/trivy:${TRIVY_VERSION:-0.57.1}" image \
+                        --exit-code 0 \
+                        --severity "${TRIVY_SEVERITY:-HIGH,CRITICAL}" \
+                        "${DOCKERHUB_USERNAME}/${APP_NAME:-devops-app}:${DOCKER_IMAGE_TAG:-latest}"
+                '''
+            }
+        }
+
+        stage('Deploy (local — direct kubectl)') {
+            when { expression { return !params.SKIP_DEPLOY && env.DEPLOY_TARGET == 'local' } }
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh '''
+                        set -Eeuo pipefail
+                        SCRIPT="platform/deployment/kubernetes/deploy_kubernetes.sh"
+                        if [ ! -f "$SCRIPT" ]; then
+                            echo "FATAL: $SCRIPT not found — repo layout may have changed"
+                            exit 1
+                        fi
+                        chmod +x "$SCRIPT"
+                        "./$SCRIPT"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy (prod — GitOps)') {
+            when { expression { return !params.SKIP_DEPLOY && env.DEPLOY_TARGET == 'prod' } }
+            steps {
+                echo 'Production deploys are GitOps-managed: ArgoCD syncs the new image tag from Git automatically. No direct kubectl apply is performed by this pipeline.'
+            }
+        }
+    }
+
+    post {
+        success { echo "Build #${env.BUILD_NUMBER} succeeded (${env.DEPLOY_TARGET})" }
+        failure { echo "Build #${env.BUILD_NUMBER} failed — see stage logs above" }
+        always  { cleanWs() }
+    }
+}

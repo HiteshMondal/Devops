@@ -1,0 +1,48 @@
+# Jenkins plugins — pinned to major versions where practical.
+# Installed at image build time via jenkins-plugin-cli (see Dockerfile).
+# jenkins-plugin-cli resolves exact versions and transitive dependencies.
+
+# Configuration as Code — drives casc/jenkins.yaml
+configuration-as-code
+configuration-as-code-groovy
+
+# Source control
+git
+github
+github-branch-source
+workflow-multibranch
+
+# Pipeline core
+workflow-aggregator
+pipeline-stage-view
+pipeline-utility-steps
+job-dsl
+
+# Docker / Kubernetes execution
+docker-workflow
+docker-plugin
+kubernetes
+kubernetes-cli
+kubernetes-credentials
+
+# Credentials & secrets
+credentials
+credentials-binding
+ssh-credentials
+plain-credentials
+
+# Security / access control
+matrix-auth
+role-strategy
+antisamy-markup-formatter
+
+# Quality of life
+timestamper
+ansicolor
+ws-cleanup
+build-timeout
+http_request
+
+# Notifications (optional — no-ops if not configured)
+slack
+email-ext

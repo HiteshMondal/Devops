@@ -34,6 +34,7 @@ Pulumi.*.yaml.bak
 .env
 .env.local
 .env.*.local
+jenkins.env
 
 # IDE / EDITOR
 .vscode/

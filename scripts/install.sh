@@ -1,9 +1,6 @@
-```bash
 #!/usr/bin/env bash
 
 set -euo pipefail
-
-clear
 
 echo "========================================"
 echo " DevOps Workstation Bootstrap Installer"
@@ -245,6 +242,12 @@ check_command \
     "aws" \
     "aws --version"
 
+# GCP CLI
+check_command \
+    "gcloud" \
+    "gcloud" \
+    "gcloud version --format='value(Google Cloud SDK)' 2>/dev/null"
+
 echo ""
 
 
@@ -286,6 +289,12 @@ if [[ ${#MISSING_TOOLS[@]} -gt 0 ]]; then
     echo ""
     echo "  AWS CLI:"
     echo "    https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+    echo ""
+    echo "  Azure CLI"
+    echo "    https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux?view=azure-cli-latest"
+    echo ""
+    echo "  GCP CLI   "
+    echo "    https://docs.cloud.google.com/sdk/docs/install-sdk"
     echo ""
 
     exit 1

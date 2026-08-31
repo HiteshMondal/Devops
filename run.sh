@@ -64,7 +64,7 @@ _menu() {
         local desc=""
         [[ "$opt" == *"|"* ]] && desc="${opt#*|}"
 
-        printf "  ${BOLD}${BRIGHT_CYAN}│${RESET}  ${BOLD}${YELLOW}%2d)${RESET}  ${BOLD}${BRIGHT_WHITE}%-30s${RESET}" \
+        printf "  ${BOLD}${BRIGHT_CYAN}│${RESET}  ${BOLD}${YELLOW}%2d)${RESET}  ${BOLD}${BRIGHT_WHITE}%-36s${RESET}  " \
             "$i" "$label"
 
         [[ -n "$desc" ]] && printf "${DIM}%s${RESET}" "$desc"
@@ -132,17 +132,16 @@ bootstrap_menu() {
 
     while true; do
 
-        clear
-
         print_section "DevOps Platform Launcher"
 
         _menu "Select Action" \
             "Install Workstation Dependencies|Docker kubectl Terraform AWS CLI etc" \
             "Reset / Cleanup Environment|Selective destructive cleanup menu" \
             "Run Platform Deployment|Normal deployment workflow" \
+            "Jenkins CI/CD|Optional — deploy or reset the Docker-based Jenkins stack" \
             "Exit"
 
-        _prompt_choice 3 4
+        _prompt_choice 3 5
 
         case "$REPLY" in
 
@@ -164,6 +163,27 @@ bootstrap_menu() {
             ;;
 
         4)
+            JENKINS_SCRIPTS="$PROJECT_ROOT/platform/cicd/jenkins/scripts"
+            if [[ ! -d "$JENKINS_SCRIPTS" ]]; then
+                print_error "platform/cicd/jenkins not found in this checkout"
+                exit 1
+            fi
+
+            _menu "Jenkins CI/CD" \
+                "Deploy Jenkins|Build and start the Docker-based Jenkins stack" \
+                "Reset Jenkins|Stop and optionally wipe the Jenkins stack" \
+                "Back"
+            _prompt_choice 3 3
+
+            case "$REPLY" in
+                1) bash "$JENKINS_SCRIPTS/deploy_jenkins.sh" ;;
+                2) bash "$JENKINS_SCRIPTS/reset_jenkins.sh" ;;
+                3) ;;
+            esac
+            exit 0
+            ;;
+
+        5)
             print_info "Exit requested"
             exit 0
             ;;
@@ -176,7 +196,6 @@ bootstrap_menu() {
 # STEP 1 — ENVIRONMENT SELECTION
 
 select_environment() {
-    clear
     print_section "DEVOPS PLATFORM — Deployment Runner" ">"
 
     _menu "Target Environment" \
