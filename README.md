@@ -25,7 +25,7 @@
 <p>
   <img src="https://img.shields.io/badge/AWS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS"/>
   <img src="https://img.shields.io/badge/Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white" alt="Azure"/>
-  <img src="https://img.shields.io/badge/Oracle%20Cloud-F80000?style=for-the-badge&logo=oracle&logoColor=white" alt="Oracle Cloud"/>
+  <img src="https://img.shields.io/badge/Google%20Cloud-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
   <img src="https://img.shields.io/badge/Terraform-844FBA?style=for-the-badge&logo=terraform&logoColor=white" alt="Terraform"/>
   <img src="https://img.shields.io/badge/OpenTofu-FFDA18?style=for-the-badge&logo=opentofu&logoColor=black" alt="OpenTofu"/>
   <img src="https://img.shields.io/badge/Pulumi-8A3391?style=for-the-badge&logo=pulumi&logoColor=white" alt="Pulumi"/>
@@ -73,7 +73,7 @@ chmod +x run.sh
 | 🏗️ **Infrastructure**  | Terraform · OpenTofu · Pulumi       |
 | 📊 **Observability**   | Prometheus · Grafana · Loki         |
 | 🛡️ **Security**        | Trivy                               |
-| ☁️ **Cloud**           | AWS · Azure · Oracle Cloud          |
+| ☁️ **Cloud**           | AWS · Azure · Google Cloud (GCP)    |
 
 <br>
 
@@ -116,7 +116,7 @@ chmod +x run.sh
                     │                          ├───────────────────────────────┤
                     │                          │ aws   → Terraform  → EKS+RDS  │
                     │                          │ azure → Pulumi     → AKS+PG   │
-                    │                          │ oci   → OpenTofu   → OKE+ADB  │
+                    │                          │ gcp   → OpenTofu   → GKE+SQL  │
                     │                          └──────────────┬────────────────┘
                     │                                         │
                     │                          detect_k8s_cluster()
@@ -198,14 +198,15 @@ For Azure deployments:
 * Configured **Azure authentication**
 * Appropriate Azure permissions to provision **AKS and PostgreSQL**
 
-### ☁️ Oracle Cloud Infrastructure (OCI)
+### ☁️ Google Cloud (GCP)
 
-For OCI deployments:
+For GCP deployments:
 
-* **OCI CLI**
+* **gcloud CLI**
 * **OpenTofu**
-* Configured **OCI credentials**
-* Appropriate OCI permissions to provision **OKE and Autonomous Database**
+* Configured **Application Default Credentials** (`gcloud auth application-default login`, or a service-account key via `GOOGLE_APPLICATION_CREDENTIALS`)
+* Appropriate GCP permissions to provision **GKE and Cloud SQL**
+* Note: Cloud SQL is not covered by GCP's Always-Free tier — it's opt-in (`enable_cloudsql`) and will incur cost
 
 ### 🔄 Production / GitOps
 
@@ -279,8 +280,8 @@ Provisions infra, then hands off to ArgoCD. Argo manages the app, monitoring, lo
 | Provider | IaC | Cluster | Database |
 |---|---|---|---|
 | AWS | Terraform | EKS | RDS PostgreSQL |
-| Oracle Cloud | OpenTofu | OKE | Autonomous DB (Always-Free) |
 | Azure | Pulumi | AKS | PostgreSQL Flexible Server |
+| Google Cloud | OpenTofu | GKE | Cloud SQL (opt-in, not Always-Free) |
 
 ---
 
@@ -304,8 +305,8 @@ Provisions infra, then hands off to ArgoCD. Argo manages the app, monitoring, lo
 │   │   └── gitlab/
 │   └── infra/
 │       ├── terraform/         # AWS
-│       ├── OpenTofu/          # OCI
-│       └── Pulumi/            # Azure
+│       ├── Pulumi/            # Azure
+│       └── OpenTofu/          # GCP
 └── monitoring/
     ├── prometheus/
     ├── grafana/

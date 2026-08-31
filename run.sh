@@ -181,7 +181,7 @@ select_environment() {
 
     _menu "Target Environment" \
         "Local|Minikube / Kind / K3s / MicroK8s" \
-        "Production|EKS / GKE / AKS / OKE"
+        "Production|EKS / GKE / AKS"
 
     _prompt_choice 1 2
 
@@ -307,8 +307,9 @@ select_cloud_provider() {
 
     _menu "Cloud Provider" \
         "AWS|Terraform (EKS + RDS)" \
-        "OCI|OpenTofu (OKE + ADB Always-Free)" \
-        "Azure|Pulumi (AKS + PostgreSQL)"
+        "Azure|Pulumi (AKS + PostgreSQL)" \
+        "GCP|OpenTofu (GKE + Cloud SQL)"
+        
 
     _prompt_choice 1 3
 
@@ -319,11 +320,11 @@ select_cloud_provider() {
             ;;
 
         2)
-            CLOUD_PROVIDER="oci"
+            CLOUD_PROVIDER="azure"
             ;;
 
         3)
-            CLOUD_PROVIDER="azure"
+            CLOUD_PROVIDER="gcp"
             ;;
 
     esac
