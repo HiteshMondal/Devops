@@ -1,41 +1,63 @@
-"""Application entrypoint.
+"""Application entrypoint — Personal/Portfolio site.
 
 Run with: uvicorn src.main:app --host 0.0.0.0 --port $APP_PORT
 (this is exactly what the Dockerfile's CMD does).
+
+Structure kept intentionally small:
+  config.py    — env-driven settings (unchanged contract with the platform)
+  database.py  — SQLite engine/session (swap for Postgres later if needed)
+  models.py    — Project, ContactMessage
+  static/app.js — the entire frontend (HTML/CSS generated client-side)
 """
-from fastapi import FastAPI, HTTPException
+from pathlib import Path
+
+from fastapi import Depends, FastAPI
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from .config import config
-from .dsa import (
-    BinarySearchTree,
-    LinkedList,
-    Trie,
-    UnionFind,
-    binary_search,
-    bfs,
-    dfs,
-    dijkstra,
-    merge_sort,
-    quicksort,
-)
-from .sysdesign import (
-    CircuitBreaker,
-    ConsistentHashRing,
-    LRUCache,
-    RoundRobinBalancer,
-    TokenBucketRateLimiter,
-)
+from .database import get_session, init_db
+from .models import ContactMessage, Project
 
 app = FastAPI(title=config.APP_NAME)
 
-# In-memory singletons used purely to demonstrate the patterns via the API.
-_lru_cache = LRUCache(capacity=5)
-_rate_limiter = TokenBucketRateLimiter(capacity=5, refill_per_second=1)
-_circuit_breaker = CircuitBreaker(failure_threshold=3, reset_timeout_seconds=15)
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+
+def db_session():
+    with get_session() as session:
+        yield session
+
+
+# Frontend
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    """Minimal shell — app.js builds the entire page client-side."""
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio</title>
+</head>
+<body>
+  <script src="/static/app.js"></script>
+</body>
+</html>"""
 
 
 # Health
+# Kept identical in shape to the previous app so probes/monitoring configs
+# already in the platform keep working unmodified.
 
 @app.get("/health")
 @app.get("/api/v1/health")
@@ -62,171 +84,45 @@ def get_config():
         "app_env": config.APP_ENV,
         "app_port": config.APP_PORT,
         "log_level": config.LOG_LEVEL,
-        "db_host": config.DB_HOST,
-        "db_port": config.DB_PORT,
-        "db_name": config.DB_NAME,
     }
 
 
-# ---DSA
+# Projects
 
-class IntList(BaseModel):
-    items: list[int]
-
-
-class SearchRequest(BaseModel):
-    items: list[int]
-    target: int
+class ProjectIn(BaseModel):
+    title: str
+    description: str = ""
+    link: str = ""
 
 
-@app.post("/dsa/sort/quicksort")
-def sort_quicksort(body: IntList):
-    return {"sorted": quicksort(body.items)}
+@app.get("/api/v1/projects")
+def list_projects(session: Session = Depends(db_session)):
+    projects = session.query(Project).order_by(Project.created_at.desc()).all()
+    return [
+        {"id": p.id, "title": p.title, "description": p.description, "link": p.link}
+        for p in projects
+    ]
 
 
-@app.post("/dsa/sort/merge-sort")
-def sort_merge(body: IntList):
-    return {"sorted": merge_sort(body.items)}
+@app.post("/api/v1/projects")
+def create_project(body: ProjectIn, session: Session = Depends(db_session)):
+    project = Project(title=body.title, description=body.description, link=body.link)
+    session.add(project)
+    session.flush()
+    return {"id": project.id}
 
 
-@app.post("/dsa/search/binary")
-def search_binary(body: SearchRequest):
-    return {"index": binary_search(sorted(body.items), body.target)}
+# Contact
+
+class ContactIn(BaseModel):
+    name: str
+    email: str
+    message: str
 
 
-class GraphRequest(BaseModel):
-    edges: list[tuple[str, str, int]]  # (from, to, weight)
-    start: str
-
-
-def _build_graph(edges: list[tuple[str, str, int]]) -> dict:
-    graph: dict = {}
-    for src, dst, weight in edges:
-        graph.setdefault(src, []).append((dst, weight))
-        graph.setdefault(dst, []).append((src, weight))
-    return graph
-
-
-@app.post("/dsa/graph/bfs")
-def graph_bfs(body: GraphRequest):
-    return {"order": bfs(_build_graph(body.edges), body.start)}
-
-
-@app.post("/dsa/graph/dfs")
-def graph_dfs(body: GraphRequest):
-    return {"order": dfs(_build_graph(body.edges), body.start)}
-
-
-@app.post("/dsa/graph/dijkstra")
-def graph_dijkstra(body: GraphRequest):
-    return {"distances": dijkstra(_build_graph(body.edges), body.start)}
-
-
-class TrieRequest(BaseModel):
-    words: list[str]
-    query: str
-
-
-@app.post("/dsa/trie/search")
-def trie_search(body: TrieRequest):
-    trie = Trie()
-    for w in body.words:
-        trie.insert(w)
-    return {"found": trie.search(body.query)}
-
-
-@app.post("/dsa/linked-list/reverse")
-def linked_list_reverse(body: IntList):
-    ll = LinkedList()
-    for x in body.items:
-        ll.push(x)
-    ll.reverse()
-    return {"reversed": ll.to_list()}
-
-
-@app.post("/dsa/bst/inorder")
-def bst_inorder(body: IntList):
-    tree = BinarySearchTree()
-    for x in body.items:
-        tree.insert(x)
-    return {"inorder": tree.inorder()}
-
-
-class UnionFindRequest(BaseModel):
-    items: list[str]
-    unions: list[tuple[str, str]]
-    a: str
-    b: str
-
-
-@app.post("/dsa/union-find/connected")
-def union_find_connected(body: UnionFindRequest):
-    uf = UnionFind(body.items)
-    for a, b in body.unions:
-        uf.union(a, b)
-    return {"connected": uf.connected(body.a, body.b)}
-
-
-# ------------------------------------------------------------- System Design
-
-@app.get("/sysdesign/rate-limiter/check")
-def rate_limiter_check():
-    return {"allowed": _rate_limiter.allow()}
-
-
-class CacheEntry(BaseModel):
-    key: str
-    value: str
-
-
-@app.post("/sysdesign/cache/put")
-def cache_put(body: CacheEntry):
-    _lru_cache.put(body.key, body.value)
-    return {"size": len(_lru_cache)}
-
-
-@app.get("/sysdesign/cache/get/{key}")
-def cache_get(key: str):
-    value = _lru_cache.get(key)
-    if value is None:
-        raise HTTPException(status_code=404, detail="key not found or evicted")
-    return {"key": key, "value": value}
-
-
-@app.post("/sysdesign/circuit-breaker/success")
-def circuit_success():
-    _circuit_breaker.record_success()
-    return {"state": _circuit_breaker.state.value}
-
-
-@app.post("/sysdesign/circuit-breaker/failure")
-def circuit_failure():
-    _circuit_breaker.record_failure()
-    return {"state": _circuit_breaker.state.value}
-
-
-@app.get("/sysdesign/circuit-breaker/state")
-def circuit_state():
-    return {"state": _circuit_breaker.state.value, "allow_request": _circuit_breaker.allow_request()}
-
-
-class HashRingRequest(BaseModel):
-    nodes: list[str]
-    key: str
-
-
-@app.post("/sysdesign/consistent-hash/lookup")
-def consistent_hash_lookup(body: HashRingRequest):
-    ring = ConsistentHashRing(body.nodes)
-    return {"node": ring.get_node(body.key)}
-
-
-class BalancerRequest(BaseModel):
-    backends: list[str]
-    requests: int = 1
-
-
-@app.post("/sysdesign/load-balancer/round-robin")
-def load_balancer_round_robin(body: BalancerRequest):
-    balancer = RoundRobinBalancer(body.backends)
-    return {"assignments": [balancer.next_backend() for _ in range(body.requests)]}
+@app.post("/api/v1/contact")
+def submit_contact(body: ContactIn, session: Session = Depends(db_session)):
+    entry = ContactMessage(name=body.name, email=body.email, message=body.message)
+    session.add(entry)
+    session.flush()
+    return {"status": "received", "id": entry.id}

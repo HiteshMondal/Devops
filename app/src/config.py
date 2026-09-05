@@ -26,12 +26,16 @@ class Config:
     APP_PORT = _int("APP_PORT", 8000)
     LOG_LEVEL = _str("LOG_LEVEL", "info")
 
-    # Database (optional — used only for the /config introspection endpoint)
+    # Database — same env-var contract as before. If DB_HOST points at a real
+    # database, wire a driver of your choice into database.py later. Until
+    # then, an on-disk SQLite file is used so the app runs with zero extra
+    # infra locally and in any cluster.
     DB_HOST = _str("DB_HOST", "localhost")
     DB_PORT = _int("DB_PORT", 5432)
     DB_NAME = _str("DB_NAME", "devopsdb")
     DB_USERNAME = _str("DB_USERNAME", "devops")
     DB_PASSWORD = _str("DB_PASSWORD", "")
+    DB_SQLITE_PATH = _str("DB_SQLITE_PATH", "/app/data/app.db")
 
     # Secrets — never exposed via the API, only read for internal use
     JWT_SECRET = _str("JWT_SECRET", "")
