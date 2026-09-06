@@ -198,6 +198,7 @@ data:
   DB_HOST: "${DB_HOST:-postgres-service}"
   DB_PORT: "${DB_PORT:-5432}"
   DB_NAME: "${DB_NAME:-devops_db}"
+  DB_SQLITE_PATH: "${DB_SQLITE_PATH:-/data/app.db}"
 EOF
 
     # 3. Generate Secrets patch (matches secretKeyRefs in the Deployment)

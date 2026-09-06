@@ -7,7 +7,7 @@ metadata:
     app: devops-app
 data:
   APP_ENV: "production"
-  DB_PATH: "/data/app.db"
+  DB_SQLITE_PATH: "/data/app.db"
   LOG_LEVEL: "INFO"
   MAX_CONCURRENT_DEPLOYMENTS: "3"
   RATE_LIMIT_PER_MINUTE: "60"

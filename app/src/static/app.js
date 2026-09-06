@@ -43,13 +43,13 @@ async function fetchJSON(url, options) {
 function renderShell() {
   document.body.innerHTML = `
     <header>
-      <h1>Your Name</h1>
+      <h1>Hitesh Mondal</h1>
       <p>Software Engineer — building things with code</p>
     </header>
     <main>
       <section id="about">
         <h2>About</h2>
-        <p class="muted">Short bio goes here. Edit this in static/app.js.</p>
+        <p class="muted"> DevOps/SRE/SDE</p>
       </section>
       <section id="projects">
         <h2>Projects</h2>

@@ -9,17 +9,23 @@ Structure kept intentionally small:
   models.py    — Project, ContactMessage
   static/app.js — the entire frontend (HTML/CSS generated client-side)
 """
+import logging
+import os
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import Depends, FastAPI
+import httpx
+from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from .config import config
 from .database import get_session, init_db
 from .models import ContactMessage, Project
+
+logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title=config.APP_NAME)
 
@@ -35,6 +41,9 @@ def on_startup():
 def db_session():
     with get_session() as session:
         yield session
+
+
+DBSession = Annotated[Session, Depends(db_session)]
 
 
 # Frontend
@@ -96,7 +105,7 @@ class ProjectIn(BaseModel):
 
 
 @app.get("/api/v1/projects")
-def list_projects(session: Session = Depends(db_session)):
+def list_projects(session: DBSession):
     projects = session.query(Project).order_by(Project.created_at.desc()).all()
     return [
         {"id": p.id, "title": p.title, "description": p.description, "link": p.link}
@@ -105,7 +114,7 @@ def list_projects(session: Session = Depends(db_session)):
 
 
 @app.post("/api/v1/projects")
-def create_project(body: ProjectIn, session: Session = Depends(db_session)):
+def create_project(body: ProjectIn, session: DBSession):
     project = Project(title=body.title, description=body.description, link=body.link)
     session.add(project)
     session.flush()
@@ -116,13 +125,45 @@ def create_project(body: ProjectIn, session: Session = Depends(db_session)):
 
 class ContactIn(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     message: str
 
 
+def _notify_contact_submission(name: str, email: str, message: str) -> None:
+    """Best-effort fire-and-forget notification for a new contact message.
+
+    Controlled entirely by the optional CONTACT_WEBHOOK_URL env var (not
+    part of the existing .env contract — add it yourself if you want this
+    active). If it's unset, this is a no-op, so behavior is unchanged for
+    anyone who hasn't opted in. Any failure here is only logged; it must
+    never affect the API response already sent to the client.
+    """
+    webhook_url = os.environ.get("CONTACT_WEBHOOK_URL", "")
+    if not webhook_url:
+        return
+
+    payload = {
+        "content": f"New contact message from {name} <{email}>:\n{message}",
+    }
+
+    try:
+        httpx.post(webhook_url, json=payload, timeout=5.0)
+    except Exception as exc:  # noqa: BLE001 — notification failures must not break the request
+        logger.warning("Contact notification webhook failed: %s", exc)
+
+
 @app.post("/api/v1/contact")
-def submit_contact(body: ContactIn, session: Session = Depends(db_session)):
+def submit_contact(
+    body: ContactIn,
+    background_tasks: BackgroundTasks,
+    session: DBSession,
+):
     entry = ContactMessage(name=body.name, email=body.email, message=body.message)
     session.add(entry)
     session.flush()
+
+    background_tasks.add_task(
+        _notify_contact_submission, body.name, body.email, body.message
+    )
+
     return {"status": "received", "id": entry.id}
