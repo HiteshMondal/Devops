@@ -26,7 +26,22 @@ const STYLES = `
   button:disabled { opacity: .6; cursor: default; }
   .muted { color: var(--muted); font-size: .9rem; }
   footer { text-align: center; color: var(--muted); padding: 2rem; font-size: .85rem; }
+
+  .auth-box { display: flex; flex-direction: column; gap: .75rem; max-width: 320px; }
+  .auth-toggle { display: flex; gap: 1rem; margin-bottom: .5rem; }
+  .auth-toggle button { background: none; border: none; color: var(--muted); cursor: pointer;
+                         padding: 0; font: inherit; border-bottom: 2px solid transparent;
+                         border-radius: 0; }
+  .auth-toggle button.active { color: var(--text); border-color: var(--accent); }
+  .auth-user-badge { display: flex; align-items: center; gap: .75rem; color: var(--muted); }
+  .auth-user-badge button { width: auto; padding: .4rem .8rem; font-size: .85rem; }
+  .auth-error { color: #ff6b6b; font-size: .85rem; min-height: 1.2em; }
 `;
+
+const TOKEN_KEY = "access_token";
+const getToken = () => localStorage.getItem(TOKEN_KEY);
+const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 function injectStyles() {
   const style = document.createElement("style");
@@ -50,6 +65,10 @@ function renderShell() {
       <section id="about">
         <h2>About</h2>
         <p class="muted"> DevOps/SRE/SDE</p>
+      </section>
+      <section id="auth">
+        <h2>Account</h2>
+        <div id="auth-container" class="muted">Loading…</div>
       </section>
       <section id="projects">
         <h2>Projects</h2>
@@ -120,11 +139,109 @@ function wireContactForm() {
   });
 }
 
+async function fetchMe() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch("/api/v1/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      clearToken();
+      return null;
+    }
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+function renderAuthSection(container, user) {
+  if (user) {
+    container.innerHTML = `
+      <div class="auth-user-badge">
+        <span>Signed in as <strong>${user.email}</strong></span>
+        <button id="logout-btn">Log out</button>
+      </div>
+    `;
+    document.getElementById("logout-btn").addEventListener("click", () => {
+      clearToken();
+      renderAuthSection(container, null);
+    });
+    return;
+  }
+
+  let mode = "login"; // or "signup"
+
+  function draw() {
+    container.innerHTML = `
+      <div class="auth-toggle">
+        <button data-mode="login" class="${mode === "login" ? "active" : ""}">Log in</button>
+        <button data-mode="signup" class="${mode === "signup" ? "active" : ""}">Sign up</button>
+      </div>
+      <form id="auth-form" class="auth-box">
+        <input name="email" type="email" placeholder="Email" required />
+        <input name="password" type="password" placeholder="Password" required minlength="8" />
+        <button type="submit">${mode === "login" ? "Log in" : "Sign up"}</button>
+        <p id="auth-error" class="auth-error"></p>
+      </form>
+    `;
+
+    container.querySelectorAll(".auth-toggle button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        mode = btn.dataset.mode;
+        draw();
+      });
+    });
+
+    const form = document.getElementById("auth-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById("auth-error");
+      errorEl.textContent = "";
+
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+
+      const data = Object.fromEntries(new FormData(form).entries());
+      const endpoint = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/signup";
+
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const body = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = body.detail || "Something went wrong.";
+          submitBtn.disabled = false;
+          return;
+        }
+
+        setToken(body.access_token);
+        const user = await fetchMe();
+        renderAuthSection(container, user);
+      } catch (err) {
+        errorEl.textContent = "Network error — try again.";
+        submitBtn.disabled = false;
+        console.error(err);
+      }
+    });
+  }
+
+  draw();
+}
+
 function renderApp() {
   injectStyles();
   renderShell();
   loadProjects();
   wireContactForm();
+
+  const authContainer = document.getElementById("auth-container");
+  fetchMe().then(user => renderAuthSection(authContainer, user));
 }
 
 document.addEventListener("DOMContentLoaded", renderApp);

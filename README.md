@@ -291,10 +291,17 @@ Provisions infra, then hands off to ArgoCD. Argo manages the app, monitoring, lo
 ```
 .
 ├── run.sh                     # Main orchestrator
+|
 ├── .env                       # Config, ports, secrets (not committed)
+|
+├── .github/workflows/prod.yml # GitHub Actions
+├── .gitlab-ci.yml
+|
 ├── app/                       # FastAPI application
 │   └── src/
+|
 ├── scripts/                   # install / reset utilities
+|
 ├── platform/
 │   ├── lib/                   # shared shell helpers (colors, logging)
 │   ├── deployment/
@@ -303,12 +310,12 @@ Provisions infra, then hands off to ArgoCD. Argo manages the app, monitoring, lo
 │   ├── cicd/
 │   │   ├── argo/              # ArgoCD app definitions
 │   │   ├── github/
-│   │   ├── gitlab/
 |   |   └── jenkins/           # Jenkins CI/CD
 │   └── infra/
 │       ├── terraform/         # AWS
 │       ├── Pulumi/            # Azure
 │       └── OpenTofu/          # GCP
+|
 └── monitoring/
     ├── prometheus/
     ├── grafana/

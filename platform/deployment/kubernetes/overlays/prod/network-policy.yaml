@@ -35,3 +35,10 @@ spec:
       port: 443
     - protocol: TCP
       port: 80
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432

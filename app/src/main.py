@@ -25,6 +25,12 @@ from .config import config
 from .database import get_session, init_db
 from .models import ContactMessage, Project
 
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+ 
+from .auth import create_access_token, hash_password, make_get_current_user, verify_password
+from .models import ContactMessage, Project, User
+
 logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title=config.APP_NAME)
@@ -44,6 +50,7 @@ def db_session():
 
 
 DBSession = Annotated[Session, Depends(db_session)]
+CurrentUser = Annotated[User, Depends(make_get_current_user(db_session))]
 
 
 # Frontend
@@ -97,6 +104,45 @@ def get_config():
 
 
 # Projects
+
+class SignupIn(BaseModel):
+    email: EmailStr
+    password: str
+ 
+ 
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+ 
+ 
+@app.post("/api/v1/auth/signup")
+def signup(body: SignupIn, session: DBSession):
+    user = User(email=body.email, hashed_password=hash_password(body.password))
+    session.add(user)
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered")
+ 
+    token = create_access_token(user.id, user.email)
+    return {"access_token": token, "token_type": "bearer"}
+ 
+ 
+@app.post("/api/v1/auth/login")
+def login(body: LoginIn, session: DBSession):
+    user = session.query(User).filter(User.email == body.email).first()
+    if user is None or not verify_password(body.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+ 
+    token = create_access_token(user.id, user.email)
+    return {"access_token": token, "token_type": "bearer"}
+ 
+ 
+@app.get("/api/v1/auth/me")
+def me(current_user: CurrentUser):
+    return {"id": current_user.id, "email": current_user.email}
+
 
 class ProjectIn(BaseModel):
     title: str
